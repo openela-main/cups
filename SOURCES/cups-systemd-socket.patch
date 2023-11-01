@@ -1,0 +1,73 @@
+diff -up cups-2.2.5/scheduler/main.c.systemd-socket cups-2.2.5/scheduler/main.c
+--- cups-2.2.5/scheduler/main.c.systemd-socket	2017-10-17 18:59:53.732431498 +0200
++++ cups-2.2.5/scheduler/main.c	2017-10-17 19:02:13.132275861 +0200
+@@ -691,8 +691,16 @@ main(int  argc,				/* I - Number of comm
+ 
+ #ifdef HAVE_ONDEMAND
+   if (OnDemand)
++  {
+     cupsdAddEvent(CUPSD_EVENT_SERVER_STARTED, NULL, NULL, "Scheduler started on demand.");
+-  else
++# ifdef HAVE_SYSTEMD
++    sd_notifyf(0, "READY=1\n"
++               "STATUS=Scheduler is running...\n"
++               "MAINPID=%lu",
++               (unsigned long) getpid());
++# endif /* HAVE_SYSTEMD */
++  } else
++
+ #endif /* HAVE_ONDEMAND */
+   if (fg)
+     cupsdAddEvent(CUPSD_EVENT_SERVER_STARTED, NULL, NULL, "Scheduler started in foreground.");
+diff -up cups-2.2.5/scheduler/org.cups.cupsd.path.in.systemd-socket cups-2.2.5/scheduler/org.cups.cupsd.path.in
+--- cups-2.2.5/scheduler/org.cups.cupsd.path.in.systemd-socket	2017-10-13 20:22:26.000000000 +0200
++++ cups-2.2.5/scheduler/org.cups.cupsd.path.in	2017-10-17 18:59:53.732431498 +0200
+@@ -1,6 +1,6 @@
+ [Unit]
+ Description=CUPS Scheduler
+-PartOf=org.cups.cupsd.service
++PartOf=cups.service
+
+ [Path]
+ PathExists=@CUPS_CACHEDIR@/org.cups.cupsd
+diff -up cups-2.2.5/scheduler/org.cups.cupsd.service.in.systemd-socket cups-2.2.5/scheduler/org.cups.cupsd.service.in
+--- cups-2.2.5/scheduler/org.cups.cupsd.service.in.systemd-socket	2017-10-13 20:22:26.000000000 +0200
++++ cups-2.2.5/scheduler/org.cups.cupsd.service.in	2017-10-17 18:59:53.732431498 +0200
+@@ -1,11 +1,13 @@
+ [Unit]
+ Description=CUPS Scheduler
+ Documentation=man:cupsd(8)
++After=network.target
+ 
+ [Service]
+ ExecStart=@sbindir@/cupsd -l
+-Type=simple
++Type=notify
++Restart=on-failure
+ 
+ [Install]
+-Also=org.cups.cupsd.socket org.cups.cupsd.path
++Also=cups.socket cups.path
+ WantedBy=printer.target
+diff -up cups-2.2.6/scheduler/org.cups.cupsd.socket.in.systemd-socket cups-2.2.6/scheduler/org.cups.cupsd.socket.in
+--- cups-2.2.6/scheduler/org.cups.cupsd.socket.in.systemd-socket 2017-11-01 15:57:53.000000000 +0100
++++ cups-2.2.6/scheduler/org.cups.cupsd.socket.in  2018-09-19 12:38:00.630843246 +0200
+@@ -1,6 +1,6 @@
+ [Unit]
+ Description=CUPS Scheduler
+-PartOf=org.cups.cupsd.service
++PartOf=cups.service
+ 
+ [Socket]
+ ListenStream=@CUPS_DEFAULT_DOMAINSOCKET@
+diff -up cups-2.2.6/scheduler/org.cups.cups-lpd.socket.systemd-socket cups-2.2.6/scheduler/org.cups.cups-lpd.socket
+--- cups-2.2.6/scheduler/org.cups.cups-lpd.socket.systemd-socket 2017-11-01 15:57:53.000000000 +0100
++++ cups-2.2.6/scheduler/org.cups.cups-lpd.socket  2018-09-19 12:38:00.630843246 +0200
+@@ -1,6 +1,6 @@
+ [Unit]
+ Description=CUPS LPD Server Socket
+-PartOf=org.cups.cups-lpd.service
++PartOf=cups-lpd.service
+ 
+ [Socket]
+ ListenStream=515

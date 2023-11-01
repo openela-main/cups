@@ -1,0 +1,24 @@
+diff -up cups-2.2.6/cups/usersys.c.defaulttls cups-2.2.6/cups/usersys.c
+--- cups-2.2.6/cups/usersys.c.defaulttls	2018-09-03 12:10:36.111230611 +0200
++++ cups-2.2.6/cups/usersys.c	2018-09-03 12:12:41.307074414 +0200
+@@ -1166,11 +1166,15 @@ cups_init_client_conf(
+ 
+   memset(cc, 0, sizeof(_cups_client_conf_t));
+ 
+-  cc->encryption     = (http_encryption_t)-1;
+-  cc->trust_first    = -1;
+-  cc->any_root       = -1;
+-  cc->expired_certs  = -1;
+-  cc->validate_certs = -1;
++#ifdef HAVE_SSL
++  cc->ssl_min_version = _HTTP_TLS_1_0;
++  cc->ssl_max_version = _HTTP_TLS_MAX;
++#endif /* HAVE_SSL */
++  cc->encryption      = (http_encryption_t)-1;
++  cc->trust_first     = -1;
++  cc->any_root        = -1;
++  cc->expired_certs   = -1;
++  cc->validate_certs  = -1;
+ 
+  /*
+   * Load settings from the org.cups.PrintingPrefs plist (which trump

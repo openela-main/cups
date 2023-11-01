@@ -1,0 +1,371 @@
+diff --git a/cups/cups.h b/cups/cups.h
+index 8f5c818..9d8c3a3 100644
+--- a/cups/cups.h
++++ b/cups/cups.h
+@@ -606,6 +606,9 @@ extern ssize_t		cupsHashData(const char *algorithm, const void *data, size_t dat
+ extern int		cupsAddIntegerOption(const char *name, int value, int num_options, cups_option_t **options) _CUPS_API_2_2_4;
+ extern int		cupsGetIntegerOption(const char *name, int num_options, cups_option_t *options) _CUPS_API_2_2_4;
+ 
++/* New in CUPS 2.3 */
++extern const char	*cupsHashString(const unsigned char *hash, size_t hashsize, char *buffer, size_t bufsize);
++
+ #  ifdef __cplusplus
+ }
+ #  endif /* __cplusplus */
+diff --git a/cups/hash.c b/cups/hash.c
+index ede5461..8ebe20b 100644
+--- a/cups/hash.c
++++ b/cups/hash.c
+@@ -21,6 +21,8 @@
+ #  include <CommonCrypto/CommonDigest.h>
+ #elif defined(HAVE_GNUTLS)
+ #  include <gnutls/crypto.h>
++#else
++#  include "md5-private.h"
+ #endif /* __APPLE__ */
+ 
+ 
+@@ -171,7 +173,9 @@ cupsHashData(const char    *algorithm,	/* I - Algorithm name */
+   unsigned char	temp[64];		/* Temporary hash buffer */
+   size_t	tempsize = 0;		/* Truncate to this size? */
+ 
+-  if (!strcmp(algorithm, "sha"))
++  if (!strcmp(algorithm, "md5"))
++    alg = GNUTLS_DIG_MD5;
++  else if (!strcmp(algorithm, "sha"))
+     alg = GNUTLS_DIG_SHA1;
+   else if (!strcmp(algorithm, "sha2-224"))
+     alg = GNUTLS_DIG_SHA224;
+@@ -219,10 +223,20 @@ cupsHashData(const char    *algorithm,	/* I - Algorithm name */
+ 
+ #else
+  /*
+-  * No hash support without CommonCrypto or GNU TLS...
++  * No hash support beyond MD5 without CommonCrypto or GNU TLS...
+   */
+ 
+-  if (hashsize < 64)
++  if (!strcmp(algorithm, "md5"))
++  {
++    _cups_md5_state_t	state;		/* MD5 state info */
++
++    _cupsMD5Init(&state);
++    _cupsMD5Append(&state, data, datalen);
++    _cupsMD5Finish(&state, hash);
++
++    return (16);
++  }
++  else if (hashsize < 64)
+     goto too_small;
+ #endif /* __APPLE__ */
+ 
+@@ -243,3 +257,51 @@ cupsHashData(const char    *algorithm,	/* I - Algorithm name */
+   _cupsSetError(IPP_STATUS_ERROR_INTERNAL, _("Hash buffer too small."), 1);
+   return (-1);
+ }
++
++
++/*
++ * 'cupsHashString()' - Format a hash value as a hexadecimal string.
++ *
++ * The passed buffer must be at least 2 * hashsize + 1 characters in length.
++ */
++
++const char *				/* O - Formatted string */
++cupsHashString(
++    const unsigned char *hash,		/* I - Hash */
++    size_t              hashsize,	/* I - Size of hash */
++    char                *buffer,	/* I - String buffer */
++    size_t		bufsize)	/* I - Size of string buffer */
++{
++  char		*bufptr = buffer;	/* Pointer into buffer */
++  static const char *hex = "0123456789abcdef";
++					/* Hex characters (lowercase!) */
++
++
++ /*
++  * Range check input...
++  */
++
++  if (!hash || hashsize < 1 || !buffer || bufsize < (2 * hashsize + 1))
++  {
++    if (buffer)
++      *buffer = '\0';
++    return (NULL);
++  }
++
++ /*
++  * Loop until we've converted the whole hash...
++  */
++
++  while (hashsize > 0)
++  {
++    *bufptr++ = hex[*hash >> 4];
++    *bufptr++ = hex[*hash & 15];
++
++    hash ++;
++    hashsize --;
++  }
++
++  *bufptr = '\0';
++
++  return (buffer);
++}
+diff --git a/cups/md5passwd.c b/cups/md5passwd.c
+index a9817aa..c9ffe04 100644
+--- a/cups/md5passwd.c
++++ b/cups/md5passwd.c
+@@ -17,6 +17,7 @@
+  * Include necessary headers...
+  */
+ 
++#include <cups/cups.h>
+ #include "http-private.h"
+ #include "string-private.h"
+ 
+@@ -31,7 +32,6 @@ httpMD5(const char *username,		/* I - User name */
+         const char *passwd,		/* I - Password string */
+ 	char       md5[33])		/* O - MD5 string */
+ {
+-  _cups_md5_state_t	state;		/* MD5 state info */
+   unsigned char		sum[16];	/* Sum data */
+   char			line[256];	/* Line to sum */
+ 
+@@ -41,15 +41,13 @@ httpMD5(const char *username,		/* I - User name */
+   */
+ 
+   snprintf(line, sizeof(line), "%s:%s:%s", username, realm, passwd);
+-  _cupsMD5Init(&state);
+-  _cupsMD5Append(&state, (unsigned char *)line, (int)strlen(line));
+-  _cupsMD5Finish(&state, sum);
++  cupsHashData("md5", (unsigned char *)line, strlen(line), sum, sizeof(sum));
+ 
+  /*
+   * Return the sum...
+   */
+ 
+-  return (httpMD5String(sum, md5));
++  return ((char *)cupsHashString(sum, sizeof(sum), md5, 33));
+ }
+ 
+ 
+@@ -65,7 +63,6 @@ httpMD5Final(const char *nonce,		/* I - Server nonce value */
+ 	     const char *resource,	/* I - Resource path */
+              char       md5[33])	/* IO - MD5 sum */
+ {
+-  _cups_md5_state_t	state;		/* MD5 state info */
+   unsigned char		sum[16];	/* Sum data */
+   char			line[1024];	/* Line of data */
+   char			a2[33];		/* Hash of method and resource */
+@@ -76,9 +73,7 @@ httpMD5Final(const char *nonce,		/* I - Server nonce value */
+   */
+ 
+   snprintf(line, sizeof(line), "%s:%s", method, resource);
+-  _cupsMD5Init(&state);
+-  _cupsMD5Append(&state, (unsigned char *)line, (int)strlen(line));
+-  _cupsMD5Finish(&state, sum);
++  cupsHashData("md5", (unsigned char *)line, strlen(line), sum, sizeof(sum));
+   httpMD5String(sum, a2);
+ 
+  /*
+@@ -88,12 +83,9 @@ httpMD5Final(const char *nonce,		/* I - Server nonce value */
+   */
+ 
+   snprintf(line, sizeof(line), "%s:%s:%s", md5, nonce, a2);
++  cupsHashData("md5", (unsigned char *)line, strlen(line), sum, sizeof(sum));
+ 
+-  _cupsMD5Init(&state);
+-  _cupsMD5Append(&state, (unsigned char *)line, (int)strlen(line));
+-  _cupsMD5Finish(&state, sum);
+-
+-  return (httpMD5String(sum, md5));
++  return ((char *)cupsHashString(sum, sizeof(sum), md5, 33));
+ }
+ 
+ 
+@@ -106,23 +98,5 @@ httpMD5String(const unsigned char *sum,	/* I - MD5 sum data */
+               char                md5[33])
+ 					/* O - MD5 sum in hex */
+ {
+-  int		i;			/* Looping var */
+-  char		*md5ptr;		/* Pointer into MD5 string */
+-  static const char hex[] = "0123456789abcdef";
+-					/* Hex digits */
+-
+-
+- /*
+-  * Convert the MD5 sum to hexadecimal...
+-  */
+-
+-  for (i = 16, md5ptr = md5; i > 0; i --, sum ++)
+-  {
+-    *md5ptr++ = hex[*sum >> 4];
+-    *md5ptr++ = hex[*sum & 15];
+-  }
+-
+-  *md5ptr = '\0';
+-
+-  return (md5);
++  return ((char *)cupsHashString(sum, 16, md5, 33));
+ }
+diff --git a/scheduler/auth.c b/scheduler/auth.c
+index 71df9dc..e7d0006 100644
+--- a/scheduler/auth.c
++++ b/scheduler/auth.c
+@@ -72,9 +72,6 @@ static int		check_authref(cupsd_client_t *con, const char *right);
+ static int		compare_locations(cupsd_location_t *a,
+ 			                  cupsd_location_t *b);
+ static cupsd_authmask_t	*copy_authmask(cupsd_authmask_t *am, void *data);
+-#if !HAVE_LIBPAM
+-static char		*cups_crypt(const char *pw, const char *salt);
+-#endif /* !HAVE_LIBPAM */
+ static void		free_authmask(cupsd_authmask_t *am, void *data);
+ #if HAVE_LIBPAM
+ static int		pam_func(int, const struct pam_message **,
+@@ -695,14 +692,14 @@ cupsdAuthorize(cupsd_client_t *con)	/* I - Client connection */
+ 	    * client...
+ 	    */
+ 
+-	    pass = cups_crypt(password, pw->pw_passwd);
++	    pass = crypt(password, pw->pw_passwd);
+ 
+ 	    if (!pass || strcmp(pw->pw_passwd, pass))
+ 	    {
+ #  ifdef HAVE_SHADOW_H
+ 	      if (spw)
+ 	      {
+-		pass = cups_crypt(password, spw->sp_pwdp);
++		pass = crypt(password, spw->sp_pwdp);
+ 
+ 		if (pass == NULL || strcmp(spw->sp_pwdp, pass))
+ 		{
+@@ -1988,129 +1985,6 @@ copy_authmask(cupsd_authmask_t *mask,	/* I - Existing auth mask */
+ }
+ 
+ 
+-#if !HAVE_LIBPAM
+-/*
+- * 'cups_crypt()' - Encrypt the password using the DES or MD5 algorithms,
+- *                  as needed.
+- */
+-
+-static char *				/* O - Encrypted password */
+-cups_crypt(const char *pw,		/* I - Password string */
+-           const char *salt)		/* I - Salt (key) string */
+-{
+-  if (!strncmp(salt, "$1$", 3))
+-  {
+-   /*
+-    * Use MD5 passwords without the benefit of PAM; this is for
+-    * Slackware Linux, and the algorithm was taken from the
+-    * old shadow-19990827/lib/md5crypt.c source code... :(
+-    */
+-
+-    int			i;		/* Looping var */
+-    unsigned long	n;		/* Output number */
+-    int			pwlen;		/* Length of password string */
+-    const char		*salt_end;	/* End of "salt" data for MD5 */
+-    char		*ptr;		/* Pointer into result string */
+-    _cups_md5_state_t	state;		/* Primary MD5 state info */
+-    _cups_md5_state_t	state2;		/* Secondary MD5 state info */
+-    unsigned char	digest[16];	/* MD5 digest result */
+-    static char		result[120];	/* Final password string */
+-
+-
+-   /*
+-    * Get the salt data between dollar signs, e.g. $1$saltdata$md5.
+-    * Get a maximum of 8 characters of salt data after $1$...
+-    */
+-
+-    for (salt_end = salt + 3; *salt_end && (salt_end - salt) < 11; salt_end ++)
+-      if (*salt_end == '$')
+-        break;
+-
+-   /*
+-    * Compute the MD5 sum we need...
+-    */
+-
+-    pwlen = strlen(pw);
+-
+-    _cupsMD5Init(&state);
+-    _cupsMD5Append(&state, (unsigned char *)pw, pwlen);
+-    _cupsMD5Append(&state, (unsigned char *)salt, salt_end - salt);
+-
+-    _cupsMD5Init(&state2);
+-    _cupsMD5Append(&state2, (unsigned char *)pw, pwlen);
+-    _cupsMD5Append(&state2, (unsigned char *)salt + 3, salt_end - salt - 3);
+-    _cupsMD5Append(&state2, (unsigned char *)pw, pwlen);
+-    _cupsMD5Finish(&state2, digest);
+-
+-    for (i = pwlen; i > 0; i -= 16)
+-      _cupsMD5Append(&state, digest, i > 16 ? 16 : i);
+-
+-    for (i = pwlen; i > 0; i >>= 1)
+-      _cupsMD5Append(&state, (unsigned char *)((i & 1) ? "" : pw), 1);
+-
+-    _cupsMD5Finish(&state, digest);
+-
+-    for (i = 0; i < 1000; i ++)
+-    {
+-      _cupsMD5Init(&state);
+-
+-      if (i & 1)
+-        _cupsMD5Append(&state, (unsigned char *)pw, pwlen);
+-      else
+-        _cupsMD5Append(&state, digest, 16);
+-
+-      if (i % 3)
+-        _cupsMD5Append(&state, (unsigned char *)salt + 3, salt_end - salt - 3);
+-
+-      if (i % 7)
+-        _cupsMD5Append(&state, (unsigned char *)pw, pwlen);
+-
+-      if (i & 1)
+-        _cupsMD5Append(&state, digest, 16);
+-      else
+-        _cupsMD5Append(&state, (unsigned char *)pw, pwlen);
+-
+-      _cupsMD5Finish(&state, digest);
+-    }
+-
+-   /*
+-    * Copy the final sum to the result string and return...
+-    */
+-
+-    memcpy(result, salt, (size_t)(salt_end - salt));
+-    ptr = result + (salt_end - salt);
+-    *ptr++ = '$';
+-
+-    for (i = 0; i < 5; i ++, ptr += 4)
+-    {
+-      n = ((((unsigned)digest[i] << 8) | (unsigned)digest[i + 6]) << 8);
+-
+-      if (i < 4)
+-        n |= (unsigned)digest[i + 12];
+-      else
+-        n |= (unsigned)digest[5];
+-
+-      to64(ptr, n, 4);
+-    }
+-
+-    to64(ptr, (unsigned)digest[11], 2);
+-    ptr += 2;
+-    *ptr = '\0';
+-
+-    return (result);
+-  }
+-  else
+-  {
+-   /*
+-    * Use the standard crypt() function...
+-    */
+-
+-    return (crypt(pw, salt));
+-  }
+-}
+-#endif /* !HAVE_LIBPAM */
+-
+-
+ /*
+  * 'free_authmask()' - Free function for auth masks.
+  */

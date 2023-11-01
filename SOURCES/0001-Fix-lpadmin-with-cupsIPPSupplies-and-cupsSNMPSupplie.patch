@@ -1,0 +1,62 @@
+From 9539c53065170e97836503074e770d7b5fbf9f83 Mon Sep 17 00:00:00 2001
+From: Michael R Sweet <michael.r.sweet@gmail.com>
+Date: Tue, 16 Jul 2019 09:27:13 -0400
+Subject: [PATCH] Fix lpadmin with cupsIPPSupplies and cupsSNMPSupplies (Issue
+ #5610)
+
+---
+ CHANGES.md        | 2 ++
+ systemv/lpadmin.c | 9 +++++++--
+ 2 files changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/systemv/lpadmin.c b/systemv/lpadmin.c
+index f428368d4..ca6d386b2 100644
+--- a/systemv/lpadmin.c
++++ b/systemv/lpadmin.c
+@@ -1467,6 +1467,7 @@ set_printer_options(
+ 	  (boolval = cupsGetOption("cupsIPPSupplies", num_options,
+ 	                           options)) != NULL)
+       {
++        ppdchanged         = 1;
+         wrote_ipp_supplies = 1;
+         cupsFilePrintf(out, "*cupsIPPSupplies: %s\n",
+ 	               (!_cups_strcasecmp(boolval, "true") ||
+@@ -1477,6 +1478,7 @@ set_printer_options(
+ 	       (boolval = cupsGetOption("cupsSNMPSupplies", num_options,
+ 	                                options)) != NULL)
+       {
++        ppdchanged          = 1;
+         wrote_snmp_supplies = 1;
+         cupsFilePrintf(out, "*cupsSNMPSupplies: %s\n",
+ 	               (!_cups_strcasecmp(boolval, "true") ||
+@@ -1537,6 +1539,8 @@ set_printer_options(
+ 	(boolval = cupsGetOption("cupsIPPSupplies", num_options,
+ 				 options)) != NULL)
+     {
++      ppdchanged = 1;
++
+       cupsFilePrintf(out, "*cupsIPPSupplies: %s\n",
+ 		     (!_cups_strcasecmp(boolval, "true") ||
+ 		      !_cups_strcasecmp(boolval, "yes") ||
+@@ -1547,6 +1551,8 @@ set_printer_options(
+         (boolval = cupsGetOption("cupsSNMPSupplies", num_options,
+ 			         options)) != NULL)
+     {
++      ppdchanged = 1;
++
+       cupsFilePrintf(out, "*cupsSNMPSupplies: %s\n",
+ 		     (!_cups_strcasecmp(boolval, "true") ||
+ 		      !_cups_strcasecmp(boolval, "yes") ||
+@@ -1561,8 +1567,7 @@ set_printer_options(
+     * Do the request...
+     */
+ 
+-    ippDelete(cupsDoFileRequest(http, request, "/admin/",
+-                                ppdchanged ? tempfile : file));
++    ippDelete(cupsDoFileRequest(http, request, "/admin/", ppdchanged ? tempfile : file));
+ 
+    /*
+     * Clean up temp files... (TODO: catch signals in case we CTRL-C during
+-- 
+2.31.1
+
