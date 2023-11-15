@@ -1,0 +1,315 @@
+diff --git a/cgi-bin/admin.c b/cgi-bin/admin.c
+index a604a8a..e678f24 100644
+--- a/cgi-bin/admin.c
++++ b/cgi-bin/admin.c
+@@ -974,6 +974,13 @@ do_am_printer(http_t *http,		/* I - HTTP connection */
+ 
+         cgiSetVariable("TEMPLATE_NAME", template);
+       }
++
++     /*
++      * Set DEVICE_URI to the actual device uri, without make and model from
++      * html form.
++      */
++
++      cgiSetVariable("DEVICE_URI", var);
+     }
+   }
+ 
+@@ -1137,6 +1144,8 @@ do_am_printer(http_t *http,		/* I - HTTP connection */
+   else if (!file &&
+            (!cgiGetVariable("PPD_NAME") || cgiGetVariable("SELECT_MAKE")))
+   {
++    int ipp_everywhere = !strncmp(var, "ipp://", 6) || !strncmp(var, "ipps://", 7) || (!strncmp(var, "dnssd://", 8) && (strstr(var, "_ipp._tcp") || strstr(var, "_ipps._tcp")));
++
+     if (modify && !cgiGetVariable("SELECT_MAKE"))
+     {
+      /*
+@@ -1282,9 +1291,8 @@ do_am_printer(http_t *http,		/* I - HTTP connection */
+         cgiStartHTML(title);
+ 	if (!cgiGetVariable("PPD_MAKE"))
+ 	  cgiSetVariable("PPD_MAKE", cgiGetVariable("CURRENT_MAKE"));
+-	if (!modify)
+-	  cgiSetVariable("CURRENT_MAKE_AND_MODEL",
+-	                 cgiGetArray("PPD_MAKE_AND_MODEL", 0));
++        if (ipp_everywhere)
++	  cgiSetVariable("SHOW_IPP_EVERYWHERE", "1");
+ 	cgiCopyTemplateLang("choose-model.tmpl");
+         cgiEndHTML();
+       }
+@@ -4219,6 +4227,11 @@ get_printer_ppd(const char *uri,	/* I - Printer URI */
+ 		host[256],		/* Hostname */
+ 		resource[256];		/* Resource path */
+   int		port;			/* Port number */
++  static const char * const pattrs[] =	/* Printer attributes we need */
++  {
++    "all",
++    "media-col-database"
++  };
+ 
+ 
+  /*
+@@ -4259,6 +4272,7 @@ get_printer_ppd(const char *uri,	/* I - Printer URI */
+ 
+   request = ippNewRequest(IPP_OP_GET_PRINTER_ATTRIBUTES);
+   ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_URI, "printer-uri", NULL, uri);
++  ippAddStrings(request, IPP_TAG_OPERATION, IPP_TAG_KEYWORD, "requested-attributes",  (int)(sizeof(pattrs) / sizeof(pattrs[0])), NULL, pattrs);
+   response = cupsDoRequest(http, request, resource);
+ 
+   if (!_ppdCreateFromIPP(buffer, bufsize, response))
+diff --git a/cups/ppd-cache.c b/cups/ppd-cache.c
+index e5f89ee..b8139c8 100644
+--- a/cups/ppd-cache.c
++++ b/cups/ppd-cache.c
+@@ -3089,8 +3089,8 @@ _ppdCreateFromIPP(char   *buffer,	/* I - Filename buffer */
+   cupsFilePrintf(fp, "*Manufacturer: \"%s\"\n", make);
+   cupsFilePrintf(fp, "*ModelName: \"%s\"\n", model);
+   cupsFilePrintf(fp, "*Product: \"(%s)\"\n", model);
+-  cupsFilePrintf(fp, "*NickName: \"%s\"\n", model);
+-  cupsFilePrintf(fp, "*ShortNickName: \"%s\"\n", model);
++  cupsFilePrintf(fp, "*NickName: \"%s - IPP Everywhere\"\n", model);
++  cupsFilePrintf(fp, "*ShortNickName: \"%s - IPP Everywhere\"\n", model);
+ 
+   if ((attr = ippFindAttribute(response, "color-supported", IPP_TAG_BOOLEAN)) != NULL && ippGetBoolean(attr, 0))
+     cupsFilePuts(fp, "*ColorDevice: True\n");
+diff --git a/scheduler/ipp.c b/scheduler/ipp.c
+index 5e9a985..4ed3c39 100644
+--- a/scheduler/ipp.c
++++ b/scheduler/ipp.c
+@@ -5829,6 +5829,12 @@ create_local_bg_thread(
+   ipp_t		*request,		/* Request to printer */
+ 		*response;		/* Response from printer */
+   ipp_attribute_t *attr;		/* Attribute in response */
++  ipp_status_t	status;			/* Status code */
++  static const char * const pattrs[] =	/* Printer attributes we need */
++  {
++    "all",
++    "media-col-database"
++  };
+ 
+ 
+  /*
+@@ -5861,12 +5867,35 @@ create_local_bg_thread(
+   cupsdLogMessage(CUPSD_LOG_DEBUG, "%s: Connected to %s:%d, sending Get-Printer-Attributes request...", printer->name, host, port);
+ 
+   request = ippNewRequest(IPP_OP_GET_PRINTER_ATTRIBUTES);
++  ippSetVersion(request, 2, 0);
+   ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_URI, "printer-uri", NULL, printer->device_uri);
+-  ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_KEYWORD, "requested-attributes", NULL, "all");
++  ippAddStrings(request, IPP_TAG_OPERATION, IPP_TAG_KEYWORD, "requested-attributes", (int)(sizeof(pattrs) / sizeof(pattrs[0])), NULL, pattrs);
+ 
+   response = cupsDoRequest(http, request, resource);
++  status   = cupsLastError();
++
++  cupsdLogMessage(CUPSD_LOG_DEBUG, "%s: Get-Printer-Attributes returned %s (%s)", printer->name, ippErrorString(cupsLastError()), cupsLastErrorString());
++
++  if (status == IPP_STATUS_ERROR_BAD_REQUEST || status == IPP_STATUS_ERROR_VERSION_NOT_SUPPORTED)
++  {
++   /*
++    * Try request using IPP/1.1, in case we are talking to an old CUPS server or
++    * printer...
++    */
+ 
+-  cupsdLogMessage(CUPSD_LOG_DEBUG, "%s: Get-Printer-Attributes returned %s", printer->name, ippErrorString(cupsLastError()));
++    ippDelete(response);
++
++    cupsdLogMessage(CUPSD_LOG_DEBUG, "%s: Re-sending Get-Printer-Attributes request using IPP/1.1...", printer->name);
++
++    request = ippNewRequest(IPP_OP_GET_PRINTER_ATTRIBUTES);
++    ippSetVersion(request, 1, 1);
++    ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_URI, "printer-uri", NULL, printer->device_uri);
++    ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_KEYWORD, "requested-attributes", NULL, "all");
++
++    response = cupsDoRequest(http, request, resource);
++
++    cupsdLogMessage(CUPSD_LOG_DEBUG, "%s: IPP/1.1 Get-Printer-Attributes returned %s (%s)", printer->name, ippErrorString(cupsLastError()), cupsLastErrorString());
++  }
+ 
+   // TODO: Grab printer icon file...
+   httpClose(http);
+@@ -5877,6 +5906,8 @@ create_local_bg_thread(
+ 
+   if (_ppdCreateFromIPP(fromppd, sizeof(fromppd), response))
+   {
++    _cupsRWLockWrite(&printer->lock);
++
+     if ((!printer->info || !*(printer->info)) && (attr = ippFindAttribute(response, "printer-info", IPP_TAG_TEXT)) != NULL)
+       cupsdSetString(&printer->info, ippGetString(attr, 0, NULL));
+ 
+@@ -5886,6 +5917,8 @@ create_local_bg_thread(
+     if ((!printer->geo_location || !*(printer->geo_location)) && (attr = ippFindAttribute(response, "printer-geo-location", IPP_TAG_URI)) != NULL)
+       cupsdSetString(&printer->geo_location, ippGetString(attr, 0, NULL));
+ 
++    _cupsRWUnlock(&printer->lock);
++
+     if ((from = cupsFileOpen(fromppd, "r")) == NULL)
+     {
+       cupsdLogMessage(CUPSD_LOG_ERROR, "%s: Unable to read generated PPD: %s", printer->name, strerror(errno));
+diff --git a/systemv/lpadmin.c b/systemv/lpadmin.c
+index bb53565..f3510ca 100644
+--- a/systemv/lpadmin.c
++++ b/systemv/lpadmin.c
+@@ -33,7 +33,7 @@ static int		delete_printer_from_class(http_t *http, char *printer,
+ static int		delete_printer_option(http_t *http, char *printer,
+ 			                      char *option);
+ static int		enable_printer(http_t *http, char *printer);
+-static char		*get_printer_ppd(const char *uri, char *buffer, size_t bufsize);
++static char		*get_printer_ppd(const char *uri, char *buffer, size_t bufsize, int *num_options, cups_option_t **options);
+ static cups_ptype_t	get_printer_type(http_t *http, char *printer, char *uri,
+ 			                 size_t urisize);
+ static int		set_printer_options(http_t *http, char *printer,
+@@ -593,7 +593,7 @@ main(int  argc,			/* I - Number of command-line arguments */
+ 
+   if ((ppd_name = cupsGetOption("ppd-name", num_options, options)) != NULL && !strcmp(ppd_name, "everywhere") && (device_uri = cupsGetOption("device-uri", num_options, options)) != NULL)
+   {
+-    if ((file = get_printer_ppd(device_uri, evefile, sizeof(evefile))) == NULL)
++    if ((file = get_printer_ppd(device_uri, evefile, sizeof(evefile), &num_options, &options)) == NULL)
+       return (1);
+ 
+     num_options = cupsRemoveOption("ppd-name", num_options, &options);
+@@ -1144,20 +1144,29 @@ enable_printer(http_t *http,		/* I - Server connection */
+  * 'get_printer_ppd()' - Get an IPP Everywhere PPD file for the given URI.
+  */
+ 
+-static char *				/* O - Filename or NULL */
+-get_printer_ppd(const char *uri,	/* I - Printer URI */
+-                char       *buffer,	/* I - Filename buffer */
+-		size_t     bufsize)	/* I - Size of filename buffer */
++static char *				/* O  - Filename or NULL */
++get_printer_ppd(
++    const char    *uri,			/* I  - Printer URI */
++    char          *buffer,		/* I  - Filename buffer */
++    size_t        bufsize,		/* I  - Size of filename buffer */
++    int           *num_options,		/* IO - Number of options */
++    cups_option_t **options)		/* IO - Options */
+ {
+   http_t	*http;			/* Connection to printer */
+   ipp_t		*request,		/* Get-Printer-Attributes request */
+ 		*response;		/* Get-Printer-Attributes response */
++  ipp_attribute_t *attr;		/* Attribute from response */
+   char		resolved[1024],		/* Resolved URI */
+ 		scheme[32],		/* URI scheme */
+ 		userpass[256],		/* Username:password */
+ 		host[256],		/* Hostname */
+ 		resource[256];		/* Resource path */
+   int		port;			/* Port number */
++  static const char * const pattrs[] =	/* Attributes to use */
++  {
++    "all",
++    "media-col-database"
++  };
+ 
+ 
+  /*
+@@ -1198,9 +1207,26 @@ get_printer_ppd(const char *uri,	/* I - Printer URI */
+ 
+   request = ippNewRequest(IPP_OP_GET_PRINTER_ATTRIBUTES);
+   ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_URI, "printer-uri", NULL, uri);
++  ippAddStrings(request, IPP_TAG_OPERATION, IPP_TAG_KEYWORD, "requested-attributes", sizeof(pattrs) / sizeof(pattrs[0]), NULL, pattrs);
+   response = cupsDoRequest(http, request, resource);
+ 
+-  if (!_ppdCreateFromIPP(buffer, bufsize, response))
++  if (cupsLastError() >= IPP_STATUS_REDIRECTION_OTHER_SITE)
++  {
++    _cupsLangPrintf(stderr, _("%s: Unable to query printer: %s"), "lpadmin", cupsLastErrorString());
++    buffer[0] = '\0';
++  }
++  else if (_ppdCreateFromIPP(buffer, bufsize, response))
++  {
++    if (!cupsGetOption("printer-geo-location", *num_options, *options) && (attr = ippFindAttribute(response, "printer-geo-location", IPP_TAG_URI)) != NULL)
++      *num_options = cupsAddOption("printer-geo-location", ippGetString(attr, 0, NULL), *num_options, options);
++
++    if (!cupsGetOption("printer-info", *num_options, *options) && (attr = ippFindAttribute(response, "printer-info", IPP_TAG_TEXT)) != NULL)
++      *num_options = cupsAddOption("printer-info", ippGetString(attr, 0, NULL), *num_options, options);
++
++    if (!cupsGetOption("printer-location", *num_options, *options) && (attr = ippFindAttribute(response, "printer-location", IPP_TAG_TEXT)) != NULL)
++      *num_options = cupsAddOption("printer-location", ippGetString(attr, 0, NULL), *num_options, options);
++  }
++  else
+     _cupsLangPrintf(stderr, _("%s: Unable to create PPD file: %s"), "lpadmin", strerror(errno));
+ 
+   ippDelete(response);
+diff --git a/templates/choose-model.tmpl b/templates/choose-model.tmpl
+index ee9338c..9c9b71f 100644
+--- a/templates/choose-model.tmpl
++++ b/templates/choose-model.tmpl
+@@ -39,6 +39,7 @@
+ <TD>
+ <SELECT NAME="PPD_NAME" SIZE="10">
+ {op=add-printer?:<OPTION VALUE="__no_change__" SELECTED>Current Driver - {current_make_and_model}</OPTION>:}
++{show_ipp_everywhere?<OPTION VALUE="everywhere" SELECTED>{current_make_and_model?{current_make_and_model} -:} IPP Everywhere &trade;</OPTION>:}
+ {[ppd_name]<OPTION VALUE="{ppd_name}" {op=modify-printer?:{?current_make_and_model={ppd_make_and_model}?SELECTED:}}>{ppd_make_and_model} ({ppd_natural_language})
+ }</SELECT>
+ </TD>
+diff --git a/templates/de/choose-model.tmpl b/templates/de/choose-model.tmpl
+index cb9b6f3..c73ccb2 100644
+--- a/templates/de/choose-model.tmpl
++++ b/templates/de/choose-model.tmpl
+@@ -39,6 +39,7 @@ Drucker {?printer_is_shared=?nicht:{?printer_is_shared=0?nicht:}} im Netzwerk fr
+ <TD>
+ <SELECT NAME="PPD_NAME" SIZE="10">
+ {op=add-printer?:<OPTION VALUE="__no_change__" SELECTED>Aktueller Treiber - {current_make_and_model}</OPTION>:}
++{show_ipp_everywhere?<OPTION VALUE="everywhere" SELECTED>{current_make_and_model?{current_make_and_model} -:} IPP Everywhere &trade;</OPTION>:}
+ {[ppd_name]<OPTION VALUE="{ppd_name}" {op=modify-printer?:{?current_make_and_model={ppd_make_and_model}?SELECTED:}}>{ppd_make_and_model} ({ppd_natural_language})
+ }</SELECT>
+ </TD>
+diff --git a/templates/es/choose-model.tmpl b/templates/es/choose-model.tmpl
+index 8a5a4ba..b5624f2 100644
+--- a/templates/es/choose-model.tmpl
++++ b/templates/es/choose-model.tmpl
+@@ -39,6 +39,7 @@
+ <TD>
+ <SELECT NAME="PPD_NAME" SIZE="10">
+ {op=add-printer?:<OPTION VALUE="__no_change__" SELECTED>Controlador actual - {current_make_and_model}</OPTION>:}
++{show_ipp_everywhere?<OPTION VALUE="everywhere" SELECTED>{current_make_and_model?{current_make_and_model} -:} IPP Everywhere &trade;</OPTION>:}
+ {[ppd_name]<OPTION VALUE="{ppd_name}" {op=modify-printer?:{?current_make_and_model={ppd_make_and_model}?SELECTED:}}>{ppd_make_and_model} ({ppd_natural_language})
+ }</SELECT>
+ </TD>
+diff --git a/templates/fr/choose-model.tmpl b/templates/fr/choose-model.tmpl
+index a4e771c..07cf93c 100644
+--- a/templates/fr/choose-model.tmpl
++++ b/templates/fr/choose-model.tmpl
+@@ -39,6 +39,7 @@
+ <TD>
+ <SELECT NAME="PPD_NAME" SIZE="10">
+ {op=add-printer?:<OPTION VALUE="__no_change__" SELECTED>Pilote courant - {current_make_and_model}</OPTION>:}
++{show_ipp_everywhere?<OPTION VALUE="everywhere" SELECTED>{current_make_and_model?{current_make_and_model} -:} IPP Everywhere &trade;</OPTION>:}
+ {[ppd_name]<OPTION VALUE="{ppd_name}" {op=modify-printer?:{?current_make_and_model={ppd_make_and_model}?SELECTED:}}>{ppd_make_and_model} ({ppd_natural_language})
+ }</SELECT>
+ </TD>
+diff --git a/templates/ja/choose-model.tmpl b/templates/ja/choose-model.tmpl
+index daf1375..6a6e4e4 100644
+--- a/templates/ja/choose-model.tmpl
++++ b/templates/ja/choose-model.tmpl
+@@ -39,6 +39,7 @@
+ <TD>
+ <SELECT NAME="PPD_NAME" SIZE="10">
+ {op=add-printer?:<OPTION VALUE="__no_change__" SELECTED>現在のドライバー - {current_make_and_model}</OPTION>:}
++{show_ipp_everywhere?<OPTION VALUE="everywhere" SELECTED>{current_make_and_model?{current_make_and_model} -:} IPP Everywhere &trade;</OPTION>:}
+ {[ppd_name]<OPTION VALUE="{ppd_name}" {op=modify-printer?:{?current_make_and_model={ppd_make_and_model}?SELECTED:}}>{ppd_make_and_model} ({ppd_natural_language})
+ }</SELECT>
+ </TD>
+diff --git a/templates/pt_BR/choose-model.tmpl b/templates/pt_BR/choose-model.tmpl
+index 55d8bd8..0ed6a3c 100644
+--- a/templates/pt_BR/choose-model.tmpl
++++ b/templates/pt_BR/choose-model.tmpl
+@@ -39,6 +39,7 @@
+ <TD>
+ <SELECT NAME="PPD_NAME" SIZE="10">
+ {op=add-printer?:<OPTION VALUE="__no_change__" SELECTED>Driver atual - {current_make_and_model}</OPTION>:}
++{show_ipp_everywhere?<OPTION VALUE="everywhere" SELECTED>{current_make_and_model?{current_make_and_model} -:} IPP Everywhere &trade;</OPTION>:}
+ {[ppd_name]<OPTION VALUE="{ppd_name}" {op=modify-printer?:{?current_make_and_model={ppd_make_and_model}?SELECTED:}}>{ppd_make_and_model} ({ppd_natural_language})
+ }</SELECT>
+ </TD>
+diff --git a/templates/ru/choose-model.tmpl b/templates/ru/choose-model.tmpl
+index 2f0d6d9..dedbd49 100644
+--- a/templates/ru/choose-model.tmpl
++++ b/templates/ru/choose-model.tmpl
+@@ -39,6 +39,7 @@
+ <TD>
+ <SELECT NAME="PPD_NAME" SIZE="10">
+ {op=add-printer?:<OPTION VALUE="__no_change__" SELECTED>Текущий драйвер - {current_make_and_model}</OPTION>:}
++{show_ipp_everywhere?<OPTION VALUE="everywhere" SELECTED>{current_make_and_model?{current_make_and_model} -:} IPP Everywhere &trade;</OPTION>:}
+ {[ppd_name]<OPTION VALUE="{ppd_name}" {op=modify-printer?:{?current_make_and_model={ppd_make_and_model}?SELECTED:}}>{ppd_make_and_model} ({ppd_natural_language})
+ }</SELECT>
+ </TD>

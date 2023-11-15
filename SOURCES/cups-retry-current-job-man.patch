@@ -1,0 +1,52 @@
+diff --git a/doc/help/man-cupsd.conf.html b/doc/help/man-cupsd.conf.html
+index 9082348..8ab1ce8 100644
+--- a/doc/help/man-cupsd.conf.html
++++ b/doc/help/man-cupsd.conf.html
+@@ -90,7 +90,7 @@ The default value is "30".
+ <dd style="margin-left: 5.0em">Specifies that a failed print job should be aborted (discarded) unless otherwise specified for the printer.
+ <dt><b>ErrorPolicy retry-job</b>
+ <dd style="margin-left: 5.0em">Specifies that a failed print job should be retried at a later time unless otherwise specified for the printer.
+-<dt><b>ErrorPolicy retry-this-job</b>
++<dt><b>ErrorPolicy retry-current-job</b>
+ <dd style="margin-left: 5.0em">Specifies that a failed print job should be retried immediately unless otherwise specified for the printer.
+ <dt><b>ErrorPolicy stop-printer</b>
+ <dd style="margin-left: 5.0em">Specifies that a failed print job should stop the printer unless otherwise specified for the printer. The 'stop-printer' error policy is the default.
+diff --git a/man/cupsd.conf.man.in b/man/cupsd.conf.man.in
+index 53a028d..ba12b07 100644
+--- a/man/cupsd.conf.man.in
++++ b/man/cupsd.conf.man.in
+@@ -135,7 +135,7 @@ Specifies that a failed print job should be aborted (discarded) unless otherwise
+ \fBErrorPolicy retry-job\fR
+ Specifies that a failed print job should be retried at a later time unless otherwise specified for the printer.
+ .TP 5
+-\fBErrorPolicy retry-this-job\fR
++\fBErrorPolicy retry-current-job\fR
+ Specifies that a failed print job should be retried immediately unless otherwise specified for the printer.
+ .TP 5
+ \fBErrorPolicy stop-printer\fR
+diff --git a/man/cupsd.conf.man.in.privilege-escalation b/man/cupsd.conf.man.in.privilege-escalation
+index ab89e15..130ea8a 100644
+--- a/man/cupsd.conf.man.in.privilege-escalation
++++ b/man/cupsd.conf.man.in.privilege-escalation
+@@ -135,7 +135,7 @@ Specifies that a failed print job should be aborted (discarded) unless otherwise
+ \fBErrorPolicy retry-job\fR
+ Specifies that a failed print job should be retried at a later time unless otherwise specified for the printer.
+ .TP 5
+-\fBErrorPolicy retry-this-job\fR
++\fBErrorPolicy retry-current-job\fR
+ Specifies that a failed print job should be retried immediately unless otherwise specified for the printer.
+ .TP 5
+ \fBErrorPolicy stop-printer\fR
+diff --git a/man/cupsd.conf.man.in.remove-weak-ciphers b/man/cupsd.conf.man.in.remove-weak-ciphers
+index 5516780..35065ca 100644
+--- a/man/cupsd.conf.man.in.remove-weak-ciphers
++++ b/man/cupsd.conf.man.in.remove-weak-ciphers
+@@ -135,7 +135,7 @@ Specifies that a failed print job should be aborted (discarded) unless otherwise
+ \fBErrorPolicy retry-job\fR
+ Specifies that a failed print job should be retried at a later time unless otherwise specified for the printer.
+ .TP 5
+-\fBErrorPolicy retry-this-job\fR
++\fBErrorPolicy retry-current-job\fR
+ Specifies that a failed print job should be retried immediately unless otherwise specified for the printer.
+ .TP 5
+ \fBErrorPolicy stop-printer\fR

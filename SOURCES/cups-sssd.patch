@@ -1,0 +1,13 @@
+diff --git a/scheduler/org.cups.cupsd.service.in b/scheduler/org.cups.cupsd.service.in
+index 11e0662..6fb7a32 100644
+--- a/scheduler/org.cups.cupsd.service.in
++++ b/scheduler/org.cups.cupsd.service.in
+@@ -1,7 +1,7 @@
+ [Unit]
+ Description=CUPS Scheduler
+ Documentation=man:cupsd(8)
+-After=network.target ypbind.service
++After=network.target nss-user-lookup.target
+ 
+ [Service]
+ ExecStart=@sbindir@/cupsd -l

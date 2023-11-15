@@ -1,0 +1,13 @@
+diff --git a/scheduler/main.c b/scheduler/main.c
+index 592531a..a6e2c3a 100644
+--- a/scheduler/main.c
++++ b/scheduler/main.c
+@@ -947,7 +947,7 @@ main(int  argc,				/* I - Number of command-line args */
+     * Write dirty config/state files...
+     */
+ 
+-    if (DirtyCleanTime && current_time >= DirtyCleanTime && cupsArrayCount(Clients) == 0)
++    if (DirtyCleanTime && current_time >= DirtyCleanTime)
+       cupsdCleanDirty();
+ 
+ #ifdef __APPLE__

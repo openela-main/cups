@@ -1,0 +1,23 @@
+diff --git a/backend/ipp.c b/backend/ipp.c
+index f8bf7e1..8440d2f 100644
+--- a/backend/ipp.c
++++ b/backend/ipp.c
+@@ -422,8 +422,7 @@ main(int  argc,				/* I - Number of command-line args */
+   * that way.
+   */
+ 
+-  if (!getuid() && (value = getenv("AUTH_UID")) != NULL &&
+-      !getenv("AUTH_PASSWORD"))
++  if (!getuid() && (value = getenv("AUTH_UID")) != NULL)
+   {
+     uid_t	uid = (uid_t)atoi(value);
+ 					/* User ID */
+@@ -457,7 +456,7 @@ main(int  argc,				/* I - Number of command-line args */
+ 
+ #  else /* No XPC, just try to run as the user ID */
+     if (uid > 0)
+-      seteuid(uid);
++      setuid(uid);
+ #  endif /* HAVE_XPC */
+   }
+ #endif /* HAVE_GSSAPI */

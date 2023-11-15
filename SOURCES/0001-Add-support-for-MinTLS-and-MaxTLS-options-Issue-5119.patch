@@ -1,0 +1,497 @@
+diff -up cups-2.2.6/cups/http-private.h.remove-weak-ciphers cups-2.2.6/cups/http-private.h
+--- cups-2.2.6/cups/http-private.h.remove-weak-ciphers	2017-11-01 15:57:53.000000000 +0100
++++ cups-2.2.6/cups/http-private.h	2018-08-07 11:53:54.985633959 +0200
+@@ -180,13 +180,17 @@ extern "C" {
+ 
+ #  define _HTTP_TLS_NONE	0	/* No TLS options */
+ #  define _HTTP_TLS_ALLOW_RC4	1	/* Allow RC4 cipher suites */
+-#  define _HTTP_TLS_ALLOW_SSL3	2	/* Allow SSL 3.0 */
+-#  define _HTTP_TLS_ALLOW_DH	4	/* Allow DH/DHE key negotiation */
+-#  define _HTTP_TLS_DENY_TLS10	16	/* Deny TLS 1.0 */
+-#  define _HTTP_TLS_DENY_CBC	32	/* Deny CBC cipher suites */
+-#  define _HTTP_TLS_ONLY_TLS10  64      /* Only use TLS 1.0 */
++#  define _HTTP_TLS_ALLOW_DH	2	/* Allow DH/DHE key negotiation */
++#  define _HTTP_TLS_DENY_CBC	4	/* Deny CBC cipher suites */
+ #  define _HTTP_TLS_SET_DEFAULT 128     /* Setting the default TLS options */
+ 
++#  define _HTTP_TLS_SSL3	0	/* Min/max version is SSL/3.0 */
++#  define _HTTP_TLS_1_0		1	/* Min/max version is TLS/1.0 */
++#  define _HTTP_TLS_1_1		2	/* Min/max version is TLS/1.1 */
++#  define _HTTP_TLS_1_2		3	/* Min/max version is TLS/1.2 */
++#  define _HTTP_TLS_1_3		4	/* Min/max version is TLS/1.3 */
++#  define _HTTP_TLS_MAX		5	/* Highest known TLS version */
++
+ 
+ /*
+  * Types and functions for SSL support...
+@@ -442,7 +446,7 @@ extern void		_httpTLSInitialize(void);
+ extern size_t		_httpTLSPending(http_t *http);
+ extern int		_httpTLSRead(http_t *http, char *buf, int len);
+ extern int		_httpTLSSetCredentials(http_t *http);
+-extern void		_httpTLSSetOptions(int options);
++extern void		_httpTLSSetOptions(int options, int min_version, int max_version);
+ extern int		_httpTLSStart(http_t *http);
+ extern void		_httpTLSStop(http_t *http);
+ extern int		_httpTLSWrite(http_t *http, const char *buf, int len);
+diff -up cups-2.2.6/cups/tlscheck.c.remove-weak-ciphers cups-2.2.6/cups/tlscheck.c
+--- cups-2.2.6/cups/tlscheck.c.remove-weak-ciphers	2017-11-01 15:57:53.000000000 +0100
++++ cups-2.2.6/cups/tlscheck.c	2018-08-07 11:53:54.987633942 +0200
+@@ -54,6 +54,8 @@ main(int  argc,				/* I - Number of comm
+   int		af = AF_UNSPEC,		/* Address family */
+ 		tls_options = _HTTP_TLS_NONE,
+ 					/* TLS options */
++		tls_min_version = _HTTP_TLS_1_0,
++		tls_max_version = _HTTP_TLS_MAX,
+ 		verbose = 0;		/* Verbosity */
+   ipp_t		*request,		/* IPP Get-Printer-Attributes request */
+ 		*response;		/* IPP Get-Printer-Attributes response */
+@@ -88,11 +90,12 @@ main(int  argc,				/* I - Number of comm
+     }
+     else if (!strcmp(argv[i], "--no-tls10"))
+     {
+-      tls_options |= _HTTP_TLS_DENY_TLS10;
++      tls_min_version = _HTTP_TLS_1_1;
+     }
+     else if (!strcmp(argv[i], "--tls10"))
+     {
+-      tls_options |= _HTTP_TLS_ONLY_TLS10;
++      tls_min_version = _HTTP_TLS_1_0;
++      tls_max_version = _HTTP_TLS_1_0;
+     }
+     else if (!strcmp(argv[i], "--rc4"))
+     {
+@@ -148,7 +151,7 @@ main(int  argc,				/* I - Number of comm
+   if (!port)
+     port = 631;
+ 
+-  _httpTLSSetOptions(tls_options);
++  _httpTLSSetOptions(tls_options, tls_min_version, tls_max_version);
+ 
+   http = httpConnect2(server, port, NULL, af, HTTP_ENCRYPTION_ALWAYS, 1, 30000, NULL);
+   if (!http)
+diff -up cups-2.2.6/cups/tls-darwin.c.remove-weak-ciphers cups-2.2.6/cups/tls-darwin.c
+--- cups-2.2.6/cups/tls-darwin.c.remove-weak-ciphers	2017-11-01 15:57:53.000000000 +0100
++++ cups-2.2.6/cups/tls-darwin.c	2018-08-07 11:53:54.986633951 +0200
+@@ -53,7 +53,9 @@ static char		*tls_keypath = NULL;
+ 					/* Server cert keychain path */
+ static _cups_mutex_t	tls_mutex = _CUPS_MUTEX_INITIALIZER;
+ 					/* Mutex for keychain/certs */
+-static int		tls_options = -1;/* Options for TLS connections */
++static int		tls_options = -1,/* Options for TLS connections */
++			tls_min_version = _HTTP_TLS_1_0,
++			tls_max_version = _HTTP_TLS_MAX;
+ 
+ 
+ /*
+@@ -1139,10 +1141,16 @@ _httpTLSRead(http_t *http,		/* I - HTTP
+  */
+ 
+ void
+-_httpTLSSetOptions(int options)		/* I - Options */
++_httpTLSSetOptions(int options,		/* I - Options */
++                   int min_version,	/* I - Minimum TLS version */
++                   int max_version)	/* I - Maximum TLS version */
+ {
+   if (!(options & _HTTP_TLS_SET_DEFAULT) || tls_options < 0)
+-    tls_options = options;
++  {
++    tls_options     = options;
++    tls_min_version = min_version;
++    tls_max_version = max_version;
++  }
+ }
+ 
+ 
+@@ -1174,7 +1182,7 @@ _httpTLSStart(http_t *http)		/* I - HTTP
+   {
+     DEBUG_puts("4_httpTLSStart: Setting defaults.");
+     _cupsSetDefaults();
+-    DEBUG_printf(("4_httpTLSStart: tls_options=%x", tls_options));
++    DEBUG_printf(("4_httpTLSStart: tls_options=%x, tls_min_version=%d, tls_max_version=%d", tls_options, tls_min_version, tls_max_version));
+   }
+ 
+ #ifdef HAVE_SECKEYCHAINOPEN
+@@ -1217,22 +1225,23 @@ _httpTLSStart(http_t *http)		/* I - HTTP
+ 
+   if (!error)
+   {
+-    SSLProtocol minProtocol;
+-
+-    if (tls_options & _HTTP_TLS_DENY_TLS10)
+-      minProtocol = kTLSProtocol11;
+-    else if (tls_options & _HTTP_TLS_ALLOW_SSL3)
+-      minProtocol = kSSLProtocol3;
+-    else
+-      minProtocol = kTLSProtocol1;
++    static const SSLProtocol protocols[] =	/* Min/max protocol versions */
++    {
++      kSSLProtocol3,
++      kTLSProtocol1,
++      kTLSProtocol11,
++      kTLSProtocol12,
++      kTLSProtocol13,
++      kTLSProtocolMaxSupported
++    };
+ 
+-    error = SSLSetProtocolVersionMin(http->tls, minProtocol);
+-    DEBUG_printf(("4_httpTLSStart: SSLSetProtocolVersionMin(%d), error=%d", minProtocol, (int)error));
++    error = SSLSetProtocolVersionMin(http->tls, protocols[tls_min_version]);
++    DEBUG_printf(("4_httpTLSStart: SSLSetProtocolVersionMin(%d), error=%d", protocols[tls_min_version], (int)error));
+ 
+-    if (!error && (tls_options & _HTTP_TLS_ONLY_TLS10))
++    if (!error)
+     {
+-      error = SSLSetProtocolVersionMax(http->tls, kTLSProtocol1);
+-      DEBUG_printf(("4_httpTLSStart: SSLSetProtocolVersionMax(kTLSProtocol1), error=%d", (int)error));
++      error = SSLSetProtocolVersionMax(http->tls, protocols[tls_max_version]);
++      DEBUG_printf(("4_httpTLSStart: SSLSetProtocolVersionMax(%d), error=%d", protocols[tls_max_version], (int)error));
+     }
+   }
+ 
+diff -up cups-2.2.6/cups/tls-gnutls.c.remove-weak-ciphers cups-2.2.6/cups/tls-gnutls.c
+--- cups-2.2.6/cups/tls-gnutls.c.remove-weak-ciphers	2017-11-01 15:57:53.000000000 +0100
++++ cups-2.2.6/cups/tls-gnutls.c	2018-08-07 11:58:45.164114342 +0200
+@@ -35,7 +35,9 @@ static char		*tls_keypath = NULL;
+ 					/* Server cert keychain path */
+ static _cups_mutex_t	tls_mutex = _CUPS_MUTEX_INITIALIZER;
+ 					/* Mutex for keychain/certs */
+-static int		tls_options = -1;/* Options for TLS connections */
++static int		tls_options = -1,/* Options for TLS connections */
++			tls_min_version = _HTTP_TLS_1_0,
++			tls_max_version = _HTTP_TLS_MAX;
+ 
+ 
+ /*
+@@ -1224,10 +1226,16 @@ _httpTLSSetCredentials(http_t *http)	/*
+  */
+ 
+ void
+-_httpTLSSetOptions(int options)		/* I - Options */
++_httpTLSSetOptions(int options, 		/* I - Options */
++                   int min_version,             /* I - Minimum TLS version */
++                   int max_version)             /* I - Maximum TLS version */
+ {
+   if (!(options & _HTTP_TLS_SET_DEFAULT) || tls_options < 0)
+-    tls_options = options;
++  {
++    tls_options     = options;
++    tls_min_version = min_version;
++    tls_max_version = max_version;
++  }
+ }
+ 
+ 
+@@ -1245,6 +1253,16 @@ _httpTLSStart(http_t *http)		/* I - Conn
+ 					/* TLS credentials */
+   char			priority_string[2048];
+ 					/* Priority string */
++  int			version;	/* Current version */
++  static const char * const versions[] =/* SSL/TLS versions */
++  {
++    "VERS-SSL3.0",
++    "VERS-TLS1.0",
++    "VERS-TLS1.1",
++    "VERS-TLS1.2",
++    "VERS-TLS1.3",
++    "VERS-TLS-ALL"
++  };
+ 
+ 
+   DEBUG_printf(("3_httpTLSStart(http=%p)", http));
+@@ -1506,14 +1524,40 @@ _httpTLSStart(http_t *http)		/* I - Conn
+ 
+   strlcpy(priority_string, "NORMAL", sizeof(priority_string));
+ 
+-  if (tls_options & _HTTP_TLS_DENY_TLS10)
+-    strlcat(priority_string, ":+VERS-TLS-ALL:-VERS-TLS1.0:-VERS-SSL3.0", sizeof(priority_string));
+-  else if (tls_options & _HTTP_TLS_ALLOW_SSL3)
++  if (tls_max_version < _HTTP_TLS_MAX)
++  {
++   /*
++    * Require specific TLS versions...
++    */
++
++    strlcat(priority_string, ":-VERS-TLS-ALL", sizeof(priority_string));
++    for (version = tls_min_version; version <= tls_max_version; version ++)
++    {
++      strlcat(priority_string, ":+", sizeof(priority_string));
++      strlcat(priority_string, versions[version], sizeof(priority_string));
++    }
++  }
++  else if (tls_min_version == _HTTP_TLS_SSL3)
++  {
++   /*
++    * Allow all versions of TLS and SSL/3.0...
++    */
++
+     strlcat(priority_string, ":+VERS-TLS-ALL:+VERS-SSL3.0", sizeof(priority_string));
+-  else if (tls_options & _HTTP_TLS_ONLY_TLS10)
+-    strlcat(priority_string, ":-VERS-TLS-ALL:-VERS-SSL3.0:+VERS-TLS1.0", sizeof(priority_string));
++  }
+   else
+-    strlcat(priority_string, ":+VERS-TLS-ALL:-VERS-SSL3.0", sizeof(priority_string));
++  {
++   /*
++    * Require a minimum version...
++    */
++
++    strlcat(priority_string, ":+VERS-TLS-ALL", sizeof(priority_string));
++    for (version = 0; version < tls_min_version; version ++)
++    {
++      strlcat(priority_string, ":-", sizeof(priority_string));
++      strlcat(priority_string, versions[version], sizeof(priority_string));
++    }
++  }
+ 
+   if (tls_options & _HTTP_TLS_ALLOW_RC4)
+     strlcat(priority_string, ":+ARCFOUR-128", sizeof(priority_string));
+diff -up cups-2.2.6/cups/tls-sspi.c.remove-weak-ciphers cups-2.2.6/cups/tls-sspi.c
+--- cups-2.2.6/cups/tls-sspi.c.remove-weak-ciphers	2017-11-01 15:57:53.000000000 +0100
++++ cups-2.2.6/cups/tls-sspi.c	2018-08-07 11:53:54.986633951 +0200
+@@ -52,7 +52,9 @@
+  * Local globals...
+  */
+ 
+-static int		tls_options = -1;/* Options for TLS connections */
++static int		tls_options = -1,/* Options for TLS connections */
++			tls_min_version = _HTTP_TLS_1_0,
++			tls_max_version = _HTTP_TLS_MAX;
+ 
+ 
+ /*
+@@ -914,7 +916,11 @@ void
+ _httpTLSSetOptions(int options)		/* I - Options */
+ {
+   if (!(options & _HTTP_TLS_SET_DEFAULT) || tls_options < 0)
+-    tls_options = options;
++  {
++    tls_options     = options;
++    tls_min_version = min_version;
++    tls_max_version = max_version;
++  }
+ }
+ 
+ 
+@@ -1782,14 +1788,14 @@ http_sspi_find_credentials(
+ #else
+   if (http->mode == _HTTP_MODE_SERVER)
+   {
+-    if (tls_options & _HTTP_TLS_ALLOW_SSL3)
++    if (tls_min_version == _HTTP_TLS_SSL3)
+       SchannelCred.grbitEnabledProtocols = SP_PROT_TLS1_SERVER | SP_PROT_SSL3_SERVER;
+     else
+       SchannelCred.grbitEnabledProtocols = SP_PROT_TLS1_SERVER;
+   }
+   else
+   {
+-    if (tls_options & _HTTP_TLS_ALLOW_SSL3)
++    if (tls_min_version == _HTTP_TLS_SSL3)
+       SchannelCred.grbitEnabledProtocols = SP_PROT_TLS1_CLIENT | SP_PROT_SSL3_CLIENT;
+     else
+       SchannelCred.grbitEnabledProtocols = SP_PROT_TLS1_CLIENT;
+diff -up cups-2.2.6/cups/usersys.c.remove-weak-ciphers cups-2.2.6/cups/usersys.c
+--- cups-2.2.6/cups/usersys.c.remove-weak-ciphers	2018-08-07 11:53:54.945634283 +0200
++++ cups-2.2.6/cups/usersys.c	2018-08-07 11:53:54.987633942 +0200
+@@ -54,7 +54,9 @@
+ typedef struct _cups_client_conf_s	/**** client.conf config data ****/
+ {
+ #ifdef HAVE_SSL
+-  int			ssl_options;	/* SSLOptions values */
++  int			ssl_options,	/* SSLOptions values */
++			ssl_min_version,/* Minimum SSL/TLS version */
++			ssl_max_version;/* Maximum SSL/TLS version */
+ #endif /* HAVE_SSL */
+   int			trust_first,	/* Trust on first use? */
+ 			any_root,	/* Allow any (e.g., self-signed) root */
+@@ -957,7 +959,7 @@ _cupsSetDefaults(void)
+     cg->validate_certs = cc.validate_certs;
+ 
+ #ifdef HAVE_SSL
+-  _httpTLSSetOptions(cc.ssl_options | _HTTP_TLS_SET_DEFAULT);
++  _httpTLSSetOptions(cc.ssl_options | _HTTP_TLS_SET_DEFAULT, cc.ssl_min_version, cc.ssl_max_version);
+ #endif /* HAVE_SSL */
+ }
+ 
+@@ -1336,7 +1338,9 @@ cups_set_ssl_options(
+   * SSLOptions [AllowRC4] [AllowSSL3] [AllowDH] [DenyTLS1.0] [None]
+   */
+ 
+-  int	options = _HTTP_TLS_NONE;	/* SSL/TLS options */
++  int	options = _HTTP_TLS_NONE,	/* SSL/TLS options */
++	min_version = _HTTP_TLS_1_0,	/* Minimum SSL/TLS version */
++	max_version = _HTTP_TLS_MAX;	/* Maximum SSL/TLS version */
+   char	temp[256],			/* Copy of value */
+ 	*start,				/* Start of option */
+ 	*end;				/* End of option */
+@@ -1364,20 +1368,38 @@ cups_set_ssl_options(
+     if (!_cups_strcasecmp(start, "AllowRC4"))
+       options |= _HTTP_TLS_ALLOW_RC4;
+     else if (!_cups_strcasecmp(start, "AllowSSL3"))
+-      options |= _HTTP_TLS_ALLOW_SSL3;
++      min_version = _HTTP_TLS_SSL3;
+     else if (!_cups_strcasecmp(start, "AllowDH"))
+       options |= _HTTP_TLS_ALLOW_DH;
+     else if (!_cups_strcasecmp(start, "DenyCBC"))
+       options |= _HTTP_TLS_DENY_CBC;
+     else if (!_cups_strcasecmp(start, "DenyTLS1.0"))
+-      options |= _HTTP_TLS_DENY_TLS10;
++      min_version = _HTTP_TLS_1_1;
++    else if (!_cups_strcasecmp(start, "MaxTLS1.0"))
++      max_version = _HTTP_TLS_1_0;
++    else if (!_cups_strcasecmp(start, "MaxTLS1.1"))
++      max_version = _HTTP_TLS_1_1;
++    else if (!_cups_strcasecmp(start, "MaxTLS1.2"))
++      max_version = _HTTP_TLS_1_2;
++    else if (!_cups_strcasecmp(start, "MaxTLS1.3"))
++      max_version = _HTTP_TLS_1_3;
++    else if (!_cups_strcasecmp(start, "MinTLS1.0"))
++      min_version = _HTTP_TLS_1_0;
++    else if (!_cups_strcasecmp(start, "MinTLS1.1"))
++      min_version = _HTTP_TLS_1_1;
++    else if (!_cups_strcasecmp(start, "MinTLS1.2"))
++      min_version = _HTTP_TLS_1_2;
++    else if (!_cups_strcasecmp(start, "MinTLS1.3"))
++      min_version = _HTTP_TLS_1_3;
+     else if (!_cups_strcasecmp(start, "None"))
+       options = _HTTP_TLS_NONE;
+   }
+ 
+-  cc->ssl_options = options;
++  cc->ssl_options     = options;
++  cc->ssl_max_version = max_version;
++  cc->ssl_min_version = min_version;
+ 
+-  DEBUG_printf(("4cups_set_ssl_options(cc=%p, value=\"%s\") options=%x", (void *)cc, value, options));
++  DEBUG_printf(("4cups_set_ssl_options(cc=%p, value=\"%s\") options=%x, min_version=%d, max_version=%d", (void *)cc, value, options, min_version, max_version));
+ }
+ #endif /* HAVE_SSL */
+ 
+diff -up cups-2.2.6/man/client.conf.man.in.remove-weak-ciphers cups-2.2.6/man/client.conf.man.in
+--- cups-2.2.6/man/client.conf.man.in.remove-weak-ciphers	2017-11-01 15:57:53.000000000 +0100
++++ cups-2.2.6/man/client.conf.man.in	2018-08-07 11:53:54.987633942 +0200
+@@ -10,7 +10,7 @@
+ .\" which should have been included with this file.  If this file is
+ .\" file is missing or damaged, see the license at "http://www.cups.org/".
+ .\"
+-.TH client.conf 5 "CUPS" "19 October 2017" "Apple Inc."
++.TH client.conf 5 "CUPS" "3 November 2017" "Apple Inc."
+ .SH NAME
+ client.conf \- client configuration file for cups
+ .SH DESCRIPTION
+@@ -56,7 +56,7 @@ Specifies the address and optionally the
+ \fBServerName \fIhostname-or-ip-address\fR[\fI:port\fR]\fB/version=1.1\fR
+ Specifies the address and optionally the port to use when connecting to a server running CUPS 1.3.12 and earlier.
+ .TP 5
+-\fBSSLOptions \fR[\fIAllowDH\fR] [\fIAllowRC4\fR] [\fIAllowSSL3\fR] [\fIDenyCBC\fR] [\fIDenyTLS1.0\fR]
++\fBSSLOptions \fR[\fIAllowDH\fR] [\fIAllowRC4\fR] [\fIAllowSSL3\fR] [\fIDenyCBC\fR] [\fIDenyTLS1.0\fR] [\fIMaxTLS1.0\fR] [\fIMaxTLS1.1\fR] [\fIMaxTLS1.2\fR] [\fIMaxTLS1.3\fR] [\fIMinTLS1.0\fR] [\fIMinTLS1.1\fR] [\fIMinTLS1.2\fR] [\fIMinTLS1.3\fR]
+ .TP 5
+ \fBSSLOptions None\fR
+ Sets encryption options (only in /etc/cups/client.conf).
+@@ -68,6 +68,9 @@ The \fIAllowRC4\fR option enables the 12
+ The \fIAllowSSL3\fR option enables SSL v3.0, which is required for some older clients that do not support TLS v1.0.
+ The \fIDenyCBC\fR option disables all CBC cipher suites.
+ The \fIDenyTLS1.0\fR option disables TLS v1.0 support - this sets the minimum protocol version to TLS v1.1.
++The \fMinTLS\fR options set the minimum TLS version to support.
++The \fMaxTLS\fR options set the maximum TLS version to support.
++Not all operating systems support TLS 1.3 at this time.
+ .TP 5
+ \fBTrustOnFirstUse Yes\fR
+ .TP 5
+diff -up cups-2.2.6/man/cupsd.conf.man.in.remove-weak-ciphers cups-2.2.6/man/cupsd.conf.man.in
+--- cups-2.2.6/man/cupsd.conf.man.in.remove-weak-ciphers	2018-08-07 11:53:54.981633991 +0200
++++ cups-2.2.6/man/cupsd.conf.man.in	2018-08-07 11:53:54.987633942 +0200
+@@ -432,10 +432,11 @@ The default is "Minimal".
+ Listens on the specified address and port for encrypted connections.
+ .\"#SSLOptions
+ .TP 5
+-\fBSSLOptions \fR[\fIAllowDH\fR] [\fIAllowRC4\fR] [\fIAllowSSL3\fR] [\fIDenyCBC\fR] [\fIDenyTLS1.0\fR]
++.TP 5
++\fBSSLOptions \fR[\fIAllowDH\fR] [\fIAllowRC4\fR] [\fIAllowSSL3\fR] [\fIDenyCBC\fR] [\fIDenyTLS1.0\fR] [\fIMaxTLS1.0\fR] [\fIMaxTLS1.1\fR] [\fIMaxTLS1.2\fR] [\fIMaxTLS1.3\fR] [\fIMinTLS1.0\fR] [\fIMinTLS1.1\fR] [\fIMinTLS1.2\fR] [\fIMinTLS1.3\fR]
+ .TP 5
+ \fBSSLOptions None\fR
+-Sets encryption options.
++Sets encryption options (only in /etc/cups/client.conf).
+ By default, CUPS only supports encryption using TLS v1.0 or higher using known secure cipher suites.
+ Security is reduced when \fIAllow\fR options are used.
+ Security is enhanced when \fIDeny\fR options are used.
+@@ -444,6 +445,9 @@ The \fIAllowRC4\fR option enables the 12
+ The \fIAllowSSL3\fR option enables SSL v3.0, which is required for some older clients that do not support TLS v1.0.
+ The \fIDenyCBC\fR option disables all CBC cipher suites.
+ The \fIDenyTLS1.0\fR option disables TLS v1.0 support - this sets the minimum protocol version to TLS v1.1.
++The \fMinTLS\fR options set the minimum TLS version to support.
++The \fMaxTLS\fR options set the maximum TLS version to support.
++Not all operating systems support TLS 1.3 at this time.
+ .\"#SSLPort
+ .TP 5
+ \fBSSLPort \fIport\fR
+diff -up cups-2.2.6/scheduler/conf.c.remove-weak-ciphers cups-2.2.6/scheduler/conf.c
+--- cups-2.2.6/scheduler/conf.c.remove-weak-ciphers	2018-08-07 11:53:54.981633991 +0200
++++ cups-2.2.6/scheduler/conf.c	2018-08-07 11:53:54.988633934 +0200
+@@ -630,7 +630,7 @@ cupsdReadConfiguration(void)
+   cupsdSetString(&ServerKeychain, "/Library/Keychains/System.keychain");
+ #  endif /* HAVE_GNUTLS */
+ 
+-  _httpTLSSetOptions(0);
++  _httpTLSSetOptions(_HTTP_TLS_NONE, _HTTP_TLS_1_0, _HTTP_TLS_MAX);
+ #endif /* HAVE_SSL */
+ 
+   language = cupsLangDefault();
+@@ -3024,7 +3024,9 @@ read_cupsd_conf(cups_file_t *fp)	/* I -
+       * SSLOptions [AllowRC4] [AllowSSL3] [AllowDH] [DenyCBC] [DenyTLS1.0] [None]
+       */
+ 
+-      int	options = 0;		/* SSL/TLS options */
++      int	options = _HTTP_TLS_NONE,/* SSL/TLS options */
++		min_version = _HTTP_TLS_1_0,
++		max_version = _HTTP_TLS_MAX;
+ 
+       if (value)
+       {
+@@ -3048,24 +3050,40 @@ read_cupsd_conf(cups_file_t *fp)	/* I -
+ 	  * Compare...
+ 	  */
+ 
+-          if (!_cups_strcasecmp(start, "AllowRC4"))
++	  if (!_cups_strcasecmp(start, "AllowRC4"))
+ 	    options |= _HTTP_TLS_ALLOW_RC4;
+-          else if (!_cups_strcasecmp(start, "AllowSSL3"))
+-	    options |= _HTTP_TLS_ALLOW_SSL3;
++	  else if (!_cups_strcasecmp(start, "AllowSSL3"))
++	    min_version = _HTTP_TLS_SSL3;
+ 	  else if (!_cups_strcasecmp(start, "AllowDH"))
+ 	    options |= _HTTP_TLS_ALLOW_DH;
+ 	  else if (!_cups_strcasecmp(start, "DenyCBC"))
+ 	    options |= _HTTP_TLS_DENY_CBC;
+ 	  else if (!_cups_strcasecmp(start, "DenyTLS1.0"))
+-	    options |= _HTTP_TLS_DENY_TLS10;
+-          else if (!_cups_strcasecmp(start, "None"))
+-	    options = 0;
++	    min_version = _HTTP_TLS_1_1;
++	  else if (!_cups_strcasecmp(start, "MaxTLS1.0"))
++	    max_version = _HTTP_TLS_1_0;
++	  else if (!_cups_strcasecmp(start, "MaxTLS1.1"))
++	    max_version = _HTTP_TLS_1_1;
++	  else if (!_cups_strcasecmp(start, "MaxTLS1.2"))
++	    max_version = _HTTP_TLS_1_2;
++	  else if (!_cups_strcasecmp(start, "MaxTLS1.3"))
++	    max_version = _HTTP_TLS_1_3;
++	  else if (!_cups_strcasecmp(start, "MinTLS1.0"))
++	    min_version = _HTTP_TLS_1_0;
++	  else if (!_cups_strcasecmp(start, "MinTLS1.1"))
++	    min_version = _HTTP_TLS_1_1;
++	  else if (!_cups_strcasecmp(start, "MinTLS1.2"))
++	    min_version = _HTTP_TLS_1_2;
++	  else if (!_cups_strcasecmp(start, "MinTLS1.3"))
++	    min_version = _HTTP_TLS_1_3;
++	  else if (!_cups_strcasecmp(start, "None"))
++	    options = _HTTP_TLS_NONE;
+ 	  else if (_cups_strcasecmp(start, "NoEmptyFragments"))
+ 	    cupsdLogMessage(CUPSD_LOG_WARN, "Unknown SSL option %s at line %d.", start, linenum);
+         }
+       }
+ 
+-      _httpTLSSetOptions(options);
++      _httpTLSSetOptions(options, min_version, max_version);
+     }
+ #endif /* HAVE_SSL */
+     else if ((!_cups_strcasecmp(line, "Port") || !_cups_strcasecmp(line, "Listen")

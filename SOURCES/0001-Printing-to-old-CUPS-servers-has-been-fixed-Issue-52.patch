@@ -1,0 +1,562 @@
+diff --git a/cups/cups-private.h b/cups/cups-private.h
+index 6fd66a9..1f66fd7 100644
+--- a/cups/cups-private.h
++++ b/cups/cups-private.h
+@@ -237,13 +237,9 @@ extern void		_cupsBufferRelease(char *b);
+ 
+ extern http_t		*_cupsConnect(void);
+ extern char		*_cupsCreateDest(const char *name, const char *info, const char *device_id, const char *device_uri, char *uri, size_t urisize);
+-extern int		_cupsGet1284Values(const char *device_id,
+-			                   cups_option_t **values);
+-extern const char	*_cupsGetDestResource(cups_dest_t *dest, char *resource,
+-			                      size_t resourcesize);
+-extern int		_cupsGetDests(http_t *http, ipp_op_t op,
+-			              const char *name, cups_dest_t **dests,
+-			              cups_ptype_t type, cups_ptype_t mask);
++extern int		_cupsGet1284Values(const char *device_id, cups_option_t **values);
++extern const char	*_cupsGetDestResource(cups_dest_t *dest, unsigned flags, char *resource, size_t resourcesize);
++extern int		_cupsGetDests(http_t *http, ipp_op_t op, const char *name, cups_dest_t **dests, cups_ptype_t type, cups_ptype_t mask);
+ extern const char	*_cupsGetPassword(const char *prompt);
+ extern void		_cupsGlobalLock(void);
+ extern _cups_globals_t	*_cupsGlobals(void);
+@@ -253,13 +249,10 @@ extern const char	*_cupsGSSServiceName(void);
+ #  endif /* HAVE_GSSAPI */
+ extern int		_cupsNextDelay(int current, int *previous);
+ extern void		_cupsSetDefaults(void);
+-extern void		_cupsSetError(ipp_status_t status, const char *message,
+-			              int localize);
++extern void		_cupsSetError(ipp_status_t status, const char *message, int localize);
+ extern void		_cupsSetHTTPError(http_status_t status);
+ #  ifdef HAVE_GSSAPI
+-extern int		_cupsSetNegotiateAuthString(http_t *http,
+-			                            const char *method,
+-						    const char *resource);
++extern int		_cupsSetNegotiateAuthString(http_t *http, const char *method, const char *resource);
+ #  endif /* HAVE_GSSAPI */
+ extern char		*_cupsUserDefault(char *name, size_t namesize);
+ 
+diff --git a/cups/dest-options.c b/cups/dest-options.c
+index 51705a5..cfa28ce 100644
+--- a/cups/dest-options.c
++++ b/cups/dest-options.c
+@@ -572,6 +572,7 @@ cupsCopyDestInfo(
+     cups_dest_t *dest)			/* I - Destination */
+ {
+   cups_dinfo_t	*dinfo;			/* Destination information */
++  unsigned	dflags;			/* Destination flags */
+   ipp_t		*request,		/* Get-Printer-Attributes request */
+ 		*response;		/* Supported attributes */
+   int		tries,			/* Number of tries so far */
+@@ -581,6 +582,7 @@ cupsCopyDestInfo(
+   char		resource[1024];		/* Resource path */
+   int		version;		/* IPP version */
+   ipp_status_t	status;			/* Status of request */
++  _cups_globals_t *cg = _cupsGlobals();	/* Pointer to library globals */
+   static const char * const requested_attrs[] =
+   {					/* Requested attributes */
+     "job-template",
+@@ -589,14 +591,25 @@ cupsCopyDestInfo(
+   };
+ 
+ 
+-  DEBUG_printf(("cupsCopyDestSupported(http=%p, dest=%p(%s))", (void *)http, (void *)dest, dest ? dest->name : ""));
++  DEBUG_printf(("cupsCopyDestInfo(http=%p, dest=%p(%s))", (void *)http, (void *)dest, dest ? dest->name : ""));
+ 
+  /*
+   * Get the default connection as needed...
+   */
+ 
+   if (!http)
+-    http = _cupsConnect();
++  {
++    http   = _cupsConnect();
++    dflags = CUPS_DEST_FLAGS_NONE;
++  }
++#ifdef AF_LOCAL
++  else if (strcmp(http->hostname, cg->server) || (httpAddrFamily(http->hostaddr) != AF_LOCAL && cg->ipp_port != httpAddrPort(http->hostaddr)))
++#else
++  else if (strcmp(http->hostname, cg->server) || cg->ipp_port != httpAddrPort(http->hostaddr))
++#endif /* AF_LOCAL */
++    dflags = CUPS_DEST_FLAGS_DEVICE;
++  else
++    dflags = CUPS_DEST_FLAGS_NONE;
+ 
+  /*
+   * Range check input...
+@@ -609,8 +622,11 @@ cupsCopyDestInfo(
+   * Get the printer URI and resource path...
+   */
+ 
+-  if ((uri = _cupsGetDestResource(dest, resource, sizeof(resource))) == NULL)
++  if ((uri = _cupsGetDestResource(dest, dflags, resource, sizeof(resource))) == NULL)
++  {
++    DEBUG_puts("1cupsCopyDestInfo: Unable to get resource.");
+     return (NULL);
++  }
+ 
+  /*
+   * Get the supported attributes...
+@@ -628,28 +644,25 @@ cupsCopyDestInfo(
+     */
+ 
+     request = ippNewRequest(IPP_OP_GET_PRINTER_ATTRIBUTES);
+-    ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_URI, "printer-uri", NULL,
+-		 uri);
+-    ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_NAME,
+-                 "requesting-user-name", NULL, cupsUser());
+-    ippAddStrings(request, IPP_TAG_OPERATION, IPP_TAG_KEYWORD,
+-		  "requested-attributes",
+-		  (int)(sizeof(requested_attrs) / sizeof(requested_attrs[0])),
+-		  NULL, requested_attrs);
++
++    ippSetVersion(request, version / 10, version % 10);
++    ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_URI, "printer-uri", NULL, uri);
++    ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_NAME, "requesting-user-name", NULL, cupsUser());
++    ippAddStrings(request, IPP_TAG_OPERATION, IPP_TAG_KEYWORD, "requested-attributes", (int)(sizeof(requested_attrs) / sizeof(requested_attrs[0])), NULL, requested_attrs);
+     response = cupsDoRequest(http, request, resource);
+     status   = cupsLastError();
+ 
+     if (status > IPP_STATUS_OK_IGNORED_OR_SUBSTITUTED)
+     {
+-      DEBUG_printf(("cupsCopyDestSupported: Get-Printer-Attributes for '%s' "
+-		    "returned %s (%s)", dest->name, ippErrorString(status),
+-		    cupsLastErrorString()));
++      DEBUG_printf(("1cupsCopyDestInfo: Get-Printer-Attributes for '%s' returned %s (%s)", dest->name, ippErrorString(status), cupsLastErrorString()));
+ 
+       ippDelete(response);
+       response = NULL;
+ 
+-      if (status == IPP_STATUS_ERROR_VERSION_NOT_SUPPORTED && version > 11)
++      if ((status == IPP_STATUS_ERROR_BAD_REQUEST || status == IPP_STATUS_ERROR_VERSION_NOT_SUPPORTED) && version > 11)
++      {
+         version = 11;
++      }
+       else if (status == IPP_STATUS_ERROR_BUSY)
+       {
+         sleep((unsigned)delay);
+@@ -665,7 +678,10 @@ cupsCopyDestInfo(
+   while (!response && tries < 10);
+ 
+   if (!response)
++  {
++    DEBUG_puts("1cupsCopyDestInfo: Unable to get printer attributes.");
+     return (NULL);
++  }
+ 
+  /*
+   * Allocate a cups_dinfo_t structure and return it...
+@@ -678,6 +694,8 @@ cupsCopyDestInfo(
+     return (NULL);
+   }
+ 
++  DEBUG_printf(("1cupsCopyDestInfo: version=%d, uri=\"%s\", resource=\"%s\".", version, uri, resource));
++
+   dinfo->version  = version;
+   dinfo->uri      = uri;
+   dinfo->resource = _cupsStrAlloc(resource);
+diff --git a/cups/dest.c b/cups/dest.c
+index 57a8dc9..3537572 100644
+--- a/cups/dest.c
++++ b/cups/dest.c
+@@ -1103,13 +1103,16 @@ cupsGetDest(const char  *name,		/* I - Destination name or @code NULL@ for the d
+  * '_cupsGetDestResource()' - Get the resource path and URI for a destination.
+  */
+ 
+-const char *				/* O - Printer URI */
++const char *				/* O - URI */
+ _cupsGetDestResource(
+     cups_dest_t *dest,			/* I - Destination */
++    unsigned    flags,			/* I - Destination flags */
+     char        *resource,		/* I - Resource buffer */
+     size_t      resourcesize)		/* I - Size of resource buffer */
+ {
+-  const char	*uri;			/* Printer URI */
++  const char	*uri,			/* URI */
++		*device_uri,		/* Device URI */
++		*printer_uri;		/* Printer URI */
+   char		scheme[32],		/* URI scheme */
+ 		userpass[256],		/* Username and password (unused) */
+ 		hostname[256];		/* Hostname */
+@@ -1132,25 +1135,46 @@ _cupsGetDestResource(
+   }
+ 
+  /*
+-  * Grab the printer URI...
++  * Grab the printer and device URIs...
+   */
+ 
+-  if ((uri = cupsGetOption("printer-uri-supported", dest->num_options, dest->options)) == NULL)
++  device_uri  = cupsGetOption("device-uri", dest->num_options, dest->options);
++  printer_uri = cupsGetOption("printer-uri-supported", dest->num_options, dest->options);
++
++  DEBUG_printf(("1_cupsGetDestResource: device-uri=\"%s\", printer-uri-supported=\"%s\".", device_uri, printer_uri));
++
++#if defined(HAVE_DNSSD) || defined(HAVE_AVAHI)
++  if (((flags & CUPS_DEST_FLAGS_DEVICE) || !printer_uri) && strstr(device_uri, "._tcp"))
+   {
+-    if ((uri = cupsGetOption("device-uri", dest->num_options, dest->options)) != NULL)
++    if ((device_uri = cups_dnssd_resolve(dest, device_uri, 5000, NULL, NULL, NULL)) != NULL)
+     {
+-#if defined(HAVE_DNSSD) || defined(HAVE_AVAHI)
+-      if (strstr(uri, "._tcp"))
+-        uri = cups_dnssd_resolve(dest, uri, 5000, NULL, NULL, NULL);
+-#endif /* HAVE_DNSSD || HAVE_AVAHI */
++      DEBUG_printf(("1_cupsGetDestResource: Resolved device-uri=\"%s\".", device_uri));
+     }
+-
+-    if (uri)
++    else
+     {
+-      DEBUG_printf(("1_cupsGetDestResource: Resolved printer-uri-supported=\"%s\"", uri));
++      DEBUG_puts("1_cupsGetDestResource: Unable to resolve device.");
+ 
+-      uri = _cupsCreateDest(dest->name, cupsGetOption("printer-info", dest->num_options, dest->options), NULL, uri, resource, resourcesize);
++      if (resource)
++	*resource = '\0';
++
++      _cupsSetError(IPP_STATUS_ERROR_INTERNAL, strerror(ENOENT), 0);
++
++      return (NULL);
+     }
++  }
++#endif /* HAVE_DNSSD || HAVE_AVAHI */
++
++  if (flags & CUPS_DEST_FLAGS_DEVICE)
++  {
++    uri = device_uri;
++  }
++  else if (printer_uri)
++  {
++    uri = printer_uri;
++  }
++  else
++  {
++    uri = _cupsCreateDest(dest->name, cupsGetOption("printer-info", dest->num_options, dest->options), NULL, device_uri, resource, resourcesize);
+ 
+     if (uri)
+     {
+@@ -1160,30 +1184,24 @@ _cupsGetDestResource(
+ 
+       uri = cupsGetOption("printer-uri-supported", dest->num_options, dest->options);
+     }
+-    else
+-    {
+-      DEBUG_puts("1_cupsGetDestResource: No printer-uri-supported found.");
++  }
+ 
+-      if (resource)
+-        *resource = '\0';
++  if (!uri)
++  {
++    DEBUG_puts("1_cupsGetDestResource: No printer-uri-supported or device-uri found.");
+ 
+-      _cupsSetError(IPP_STATUS_ERROR_INTERNAL, strerror(ENOENT), 0);
++    if (resource)
++      *resource = '\0';
+ 
+-      return (NULL);
+-    }
++    _cupsSetError(IPP_STATUS_ERROR_INTERNAL, strerror(ENOENT), 0);
++
++    return (NULL);
+   }
+-  else
++  else if (httpSeparateURI(HTTP_URI_CODING_ALL, uri, scheme, sizeof(scheme), userpass, sizeof(userpass), hostname, sizeof(hostname), &port, resource, (int)resourcesize) < HTTP_URI_STATUS_OK)
+   {
+-    DEBUG_printf(("1_cupsGetDestResource: printer-uri-supported=\"%s\"", uri));
++    _cupsSetError(IPP_STATUS_ERROR_INTERNAL, _("Bad URI."), 1);
+ 
+-    if (httpSeparateURI(HTTP_URI_CODING_ALL, uri, scheme, sizeof(scheme),
+-                        userpass, sizeof(userpass), hostname, sizeof(hostname),
+-                        &port, resource, (int)resourcesize) < HTTP_URI_STATUS_OK)
+-    {
+-      _cupsSetError(IPP_STATUS_ERROR_INTERNAL, _("Bad printer-uri."), 1);
+-
+-      return (NULL);
+-    }
++    return (NULL);
+   }
+ 
+   DEBUG_printf(("1_cupsGetDestResource: resource=\"%s\"", resource));
+diff --git a/cups/testdest.c b/cups/testdest.c
+index c5c2052..27060f6 100644
+--- a/cups/testdest.c
++++ b/cups/testdest.c
+@@ -43,9 +43,12 @@ int					/* O - Exit status */
+ main(int  argc,				/* I - Number of command-line arguments */
+      char *argv[])			/* I - Command-line arguments */
+ {
++  int		i;			/* Looping var */
+   http_t	*http;			/* Connection to destination */
+   cups_dest_t	*dest = NULL;		/* Destination */
+   cups_dinfo_t	*dinfo;			/* Destination info */
++  unsigned	dflags = CUPS_DEST_FLAGS_NONE;
++					/* Destination flags */
+ 
+ 
+   if (argc < 2)
+@@ -103,9 +106,17 @@ main(int  argc,				/* I - Number of command-line arguments */
+ 
+     return (0);
+   }
+-  else if (!strncmp(argv[1], "ipp://", 6) || !strncmp(argv[1], "ipps://", 7))
+-    dest = cupsGetDestWithURI(NULL, argv[1]);
+-  else if (!strcmp(argv[1], "default"))
++
++  i = 1;
++  if (!strcmp(argv[i], "--device"))
++  {
++    dflags = CUPS_DEST_FLAGS_DEVICE;
++    i ++;
++  }
++
++  if (!strncmp(argv[i], "ipp://", 6) || !strncmp(argv[i], "ipps://", 7))
++    dest = cupsGetDestWithURI(NULL, argv[i]);
++  else if (!strcmp(argv[i], "default"))
+   {
+     dest = cupsGetNamedDest(CUPS_HTTP_DEFAULT, NULL, NULL);
+     if (dest && dest->instance)
+@@ -114,67 +125,70 @@ main(int  argc,				/* I - Number of command-line arguments */
+       printf("default is \"%s\".\n", dest->name);
+   }
+   else
+-    dest = cupsGetNamedDest(CUPS_HTTP_DEFAULT, argv[1], NULL);
++    dest = cupsGetNamedDest(CUPS_HTTP_DEFAULT, argv[i], NULL);
+ 
+   if (!dest)
+   {
+-    printf("testdest: Unable to get destination \"%s\": %s\n", argv[1], cupsLastErrorString());
++    printf("testdest: Unable to get destination \"%s\": %s\n", argv[i], cupsLastErrorString());
+     return (1);
+   }
+ 
+-  if ((http = cupsConnectDest(dest, CUPS_DEST_FLAGS_NONE, 30000, NULL, NULL, 0, NULL, NULL)) == NULL)
++  i ++;
++
++  if ((http = cupsConnectDest(dest, dflags, 30000, NULL, NULL, 0, NULL, NULL)) == NULL)
+   {
+-    printf("testdest: Unable to connect to destination \"%s\": %s\n", argv[1], cupsLastErrorString());
++    printf("testdest: Unable to connect to destination \"%s\": %s\n", dest->name, cupsLastErrorString());
+     return (1);
+   }
+ 
+   if ((dinfo = cupsCopyDestInfo(http, dest)) == NULL)
+   {
+-    printf("testdest: Unable to get information for destination \"%s\": %s\n", argv[1], cupsLastErrorString());
++    printf("testdest: Unable to get information for destination \"%s\": %s\n", dest->name, cupsLastErrorString());
+     return (1);
+   }
+ 
+-  if (argc == 2 || (!strcmp(argv[2], "supported") && argc < 6))
++  if (i == argc || !strcmp(argv[i], "supported"))
+   {
+-    if (argc > 3)
+-      show_supported(http, dest, dinfo, argv[3], argv[4]);
++    i ++;
++
++    if ((i + 1) < argc)
++      show_supported(http, dest, dinfo, argv[i], argv[i + 1]);
+     else if (argc > 2)
+-      show_supported(http, dest, dinfo, argv[3], NULL);
++      show_supported(http, dest, dinfo, argv[i], NULL);
+     else
+       show_supported(http, dest, dinfo, NULL, NULL);
+   }
+-  else if (!strcmp(argv[2], "conflicts") && argc > 3)
++  else if (!strcmp(argv[i], "conflicts") && (i + 1) < argc)
+   {
+-    int			i,		/* Looping var */
+-			num_options = 0;/* Number of options */
++    int			num_options = 0;/* Number of options */
+     cups_option_t	*options = NULL;/* Options */
+ 
+-    for (i = 3; i < argc; i ++)
++    for (i ++; i < argc; i ++)
+       num_options = cupsParseOptions(argv[i], num_options, &options);
+ 
+     show_conflicts(http, dest, dinfo, num_options, options);
+   }
+-  else if (!strcmp(argv[2], "default") && argc == 4)
++  else if (!strcmp(argv[i], "default") && (i + 1) < argc)
+   {
+-    show_default(http, dest, dinfo, argv[3]);
++    show_default(http, dest, dinfo, argv[i + 1]);
+   }
+-  else if (!strcmp(argv[2], "localize") && argc < 6)
++  else if (!strcmp(argv[i], "localize"))
+   {
+-    if (argc > 3)
+-      localize(http, dest, dinfo, argv[3], argv[4]);
++    i ++;
++    if ((i + 1) < argc)
++      localize(http, dest, dinfo, argv[i], argv[i + 1]);
+     else if (argc > 2)
+-      localize(http, dest, dinfo, argv[3], NULL);
++      localize(http, dest, dinfo, argv[i], NULL);
+     else
+       localize(http, dest, dinfo, NULL, NULL);
+   }
+-  else if (!strcmp(argv[2], "media"))
++  else if (!strcmp(argv[i], "media"))
+   {
+-    int		i;			/* Looping var */
+     const char	*name = NULL;		/* Media name, if any */
+     unsigned	flags = CUPS_MEDIA_FLAGS_DEFAULT;
+ 					/* Media selection flags */
+ 
+-    for (i = 3; i < argc; i ++)
++    for (i ++; i < argc; i ++)
+     {
+       if (!strcmp(argv[i], "borderless"))
+ 	flags = CUPS_MEDIA_FLAGS_BORDERLESS;
+@@ -192,19 +206,19 @@ main(int  argc,				/* I - Number of command-line arguments */
+ 
+     show_media(http, dest, dinfo, flags, name);
+   }
+-  else if (!strcmp(argv[2], "print") && argc > 3)
++  else if (!strcmp(argv[i], "print") && (i + 1) < argc)
+   {
+-    int			i,		/* Looping var */
+-			num_options = 0;/* Number of options */
++    int			num_options = 0;/* Number of options */
+     cups_option_t	*options = NULL;/* Options */
++    const char		*filename = argv[i + 1];
+ 
+-    for (i = 4; i < argc; i ++)
++    for (i += 2; i < argc; i ++)
+       num_options = cupsParseOptions(argv[i], num_options, &options);
+ 
+-    print_file(http, dest, dinfo, argv[3], num_options, options);
++    print_file(http, dest, dinfo, filename, num_options, options);
+   }
+   else
+-    usage(argv[2]);
++    usage(argv[i]);
+ 
+   return (0);
+ }
+@@ -740,9 +754,9 @@ usage(const char *arg)			/* I - Argument for usage message */
+     printf("testdest: Unknown option \"%s\".\n", arg);
+ 
+   puts("Usage:");
+-  puts("  ./testdest name [operation ...]");
+-  puts("  ./testdest ipp://... [operation ...]");
+-  puts("  ./testdest ipps://... [operation ...]");
++  puts("  ./testdest [--device] name [operation ...]");
++  puts("  ./testdest [--device] ipp://... [operation ...]");
++  puts("  ./testdest [--device] ipps://... [operation ...]");
+   puts("  ./testdest --enum [grayscale] [color] [duplex] [staple] [small]\n"
+        "                    [medium] [large]");
+   puts("");
+diff --git a/test/ippserver.c b/test/ippserver.c
+index 38b304f..c593d3a 100644
+--- a/test/ippserver.c
++++ b/test/ippserver.c
+@@ -461,6 +461,7 @@ static AvahiClient	*DNSSDClient = NULL;
+ #endif /* HAVE_DNSSD */
+ 
+ static int		KeepFiles = 0,
++			MaxVersion = 20,
+ 			Verbosity = 0;
+ 
+ 
+@@ -533,6 +534,23 @@ main(int  argc,				/* I - Number of command-line args */
+               pin = 1;
+               break;
+ 
++          case 'V' : /* -V max-version */
++	      i ++;
++	      if (i >= argc)
++	        usage(1);
++
++              if (!strcmp(argv[i], "2.2"))
++                MaxVersion = 22;
++	      else if (!strcmp(argv[i], "2.1"))
++                MaxVersion = 21;
++	      else if (!strcmp(argv[i], "2.0"))
++                MaxVersion = 20;
++	      else if (!strcmp(argv[i], "1.1"))
++                MaxVersion = 11;
++	      else
++	        usage(1);
++              break;
++
+ 	  case 'a' : /* -a attributes-file */
+ 	      i ++;
+ 	      if (i >= argc)
+@@ -1324,9 +1342,10 @@ create_printer(const char *servername,	/* I - Server hostname (NULL for default)
+   };
+   static const char * const versions[] =/* ipp-versions-supported values */
+   {
+-    "1.0",
+     "1.1",
+-    "2.0"
++    "2.0",
++    "2.1",
++    "2.2"
+   };
+   static const char * const features[] =/* ipp-features-supported values */
+   {
+@@ -1738,7 +1757,12 @@ create_printer(const char *servername,	/* I - Server hostname (NULL for default)
+ 
+   /* ipp-versions-supported */
+   if (!ippFindAttribute(printer->attrs, "ipp-versions-supported", IPP_TAG_ZERO))
+-    ippAddStrings(printer->attrs, IPP_TAG_PRINTER, IPP_CONST_TAG(IPP_TAG_KEYWORD), "ipp-versions-supported", sizeof(versions) / sizeof(versions[0]), NULL, versions);
++  {
++    int num_versions = MaxVersion == 11 ? 1 : MaxVersion == 20 ? 2 : MaxVersion == 21 ? 3 : 4;
++					/* Number of supported versions */
++
++    ippAddStrings(printer->attrs, IPP_TAG_PRINTER, IPP_CONST_TAG(IPP_TAG_KEYWORD), "ipp-versions-supported", num_versions, NULL, versions);
++  }
+ 
+   /* job-account-id-default */
+   if (!ippFindAttribute(printer->attrs, "job-account-id-default", IPP_TAG_ZERO))
+@@ -5800,15 +5824,24 @@ process_ipp(_ipp_client_t *client)	/* I - Client */
+     * Return an error, since we only support IPP 1.x and 2.x.
+     */
+ 
+-    respond_ipp(client, IPP_STATUS_ERROR_VERSION_NOT_SUPPORTED,
+-                "Bad request version number %d.%d.", major, minor);
++    respond_ipp(client, IPP_STATUS_ERROR_VERSION_NOT_SUPPORTED, "Bad request version number %d.%d.", major, minor);
++  }
++  else if ((major * 10 + minor) > MaxVersion)
++  {
++    if (httpGetState(client->http) != HTTP_STATE_POST_SEND)
++      httpFlush(client->http);		/* Flush trailing (junk) data */
++
++    respond_http(client, HTTP_STATUS_BAD_REQUEST, NULL, NULL, 0);
++    return (0);
+   }
+   else if (ippGetRequestId(client->request) <= 0)
+-    respond_ipp(client, IPP_STATUS_ERROR_BAD_REQUEST, "Bad request-id %d.",
+-                ippGetRequestId(client->request));
++  {
++    respond_ipp(client, IPP_STATUS_ERROR_BAD_REQUEST, "Bad request-id %d.", ippGetRequestId(client->request));
++  }
+   else if (!ippFirstAttribute(client->request))
+-    respond_ipp(client, IPP_STATUS_ERROR_BAD_REQUEST,
+-                "No attributes in request.");
++  {
++    respond_ipp(client, IPP_STATUS_ERROR_BAD_REQUEST, "No attributes in request.");
++  }
+   else
+   {
+    /*
+@@ -6877,8 +6910,7 @@ usage(int status)			/* O - Exit status */
+ {
+   if (!status)
+   {
+-    puts(CUPS_SVERSION " - Copyright 2010-2015 by Apple Inc. All rights "
+-         "reserved.");
++    puts(CUPS_SVERSION " - Copyright (c) 2010-2018 by Apple Inc. All rights reserved.");
+     puts("");
+   }
+ 
+@@ -6888,6 +6920,7 @@ usage(int status)			/* O - Exit status */
+   puts("-2                      Supports 2-sided printing (default=1-sided)");
+   puts("-M manufacturer         Manufacturer name (default=Test)");
+   puts("-P                      PIN printing mode");
++  puts("-V max-version          Set maximum supported IPP version");
+   puts("-a attributes-file      Load printer attributes from file");
+   puts("-c command              Run command for every print job");
+   printf("-d spool-directory      Spool directory "
