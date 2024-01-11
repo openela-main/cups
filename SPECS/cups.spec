@@ -22,7 +22,7 @@ Summary: CUPS printing system
 Name: cups
 Epoch: 1
 Version: 2.2.6
-Release: 51%{?dist}.2
+Release: 54%{?dist}
 License: GPLv2+ and LGPLv2 with exceptions and AML
 Url: http://www.cups.org/
 Source0: https://github.com/apple/cups/releases/download/v%{VERSION}/cups-%{VERSION}-source.tar.gz
@@ -152,8 +152,18 @@ Patch77: cups-retry-current-job-man.patch
 Patch78: 0001-Update-man-pages-for-h-option-Issue-357.patch
 # 2130391 - Kerberized IPP Printing Fails
 Patch79: cups-kerberos.patch
+# 2217178 - Delays printing to lpd when reserved ports are exhausted
+Patch80: 0001-Fix-delays-printing-to-lpd-when-reserved-ports-are-e.patch
+# 2217283 - The command "cancel -x <job>" does not remove job files
+Patch81: 0001-Use-purge-job-instead-of-purge-jobs-when-canceling-a.patch
+# 2217955 - Enlarge backlog queue for listen() in cupsd
+Patch82: 0001-cups-http-addr.c-Set-listen-backlog-size-to-INT_MAX-.patch
+# CVE-2023-34241 cups: use-after-free in cupsdAcceptClient() in scheduler/client.c
+Patch83: 0001-Log-result-of-httpGetHostname-BEFORE-closing-the-con.patch
+# CVE-2023-32324 cups: heap buffer overflow may lead to DoS
+Patch84: 0001-cups-strlcpy-handle-zero-size.patch
 # CVE-2023-32360 cups:  Information leak through Cups-Get-Document operation
-Patch80: 0001-Require-authentication-for-CUPS-Get-Document.patch
+Patch85: 0001-Require-authentication-for-CUPS-Get-Document.patch
 
 Patch1000: cups-lspp.patch
 
@@ -443,8 +453,18 @@ Sends IPP requests to the specified URI and tests and/or displays the results.
 %patch78 -p1 -b .manpage-update
 # 2130391 - Kerberized IPP Printing Fails
 %patch79 -p1 -b .kerberos
+# 2217178 - Delays printing to lpd when reserved ports are exhausted
+%patch80 -p1 -b .lpd-delay
+# 2217283 - The command "cancel -x <job>" does not remove job files
+%patch81 -p1 -b .purge-job
+# 2217955 - Enlarge backlog queue for listen() in cupsd
+%patch82 -p1 -b .listen-backlog
+# CVE-2023-34241 cups: use-after-free in cupsdAcceptClient() in scheduler/client.c
+%patch83 -p1 -b .cve34241
+# CVE-2023-32324 cups: heap buffer overflow may lead to DoS
+%patch84 -p1 -b .cve32324
 # CVE-2023-32360 cups: Information leak through Cups-Get-Document operation
-%patch80 -p1 -b .get-document-auth
+%patch85 -p1 -b .get-document-auth
 
 sed -i -e '1iMaxLogSize 0' conf/cupsd.conf.in
 
@@ -871,11 +891,21 @@ rm -f %{cups_serverbin}/backend/smb
 %{_mandir}/man5/ipptoolfile.5.gz
 
 %changelog
-* Mon Sep 11 2023 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-51.2
-- RHEL-2975 - cups pulls an unneeded dependency on python3
+* Tue Sep 12 2023 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-54
+- RHEL-2612 - cups pulls an unneeded dependency on python3
 
-* Tue Aug 15 2023 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-51.1
+* Tue Aug 29 2023 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-53
 - CVE-2023-32360 cups: Information leak through Cups-Get-Document operation
+
+* Thu Jun 29 2023 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-52
+- 2217178 - Delays printing to lpd when reserved ports are exhausted
+- 2217283 - The command "cancel -x <job>" does not remove job files
+- 2217955 - Enlarge backlog queue for listen() in cupsd
+- CVE-2023-34241 cups: use-after-free in cupsdAcceptClient() in scheduler/client.c
+- CVE-2023-32324 cups: heap buffer overflow may lead to DoS
+
+* Mon Apr 03 2023 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-51
+- RHEL-316 - Enable fmf tests in centos stream
 
 * Wed Dec 14 2022 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-51
 - 2130391 - Kerberized IPP Printing Fails
