@@ -167,11 +167,11 @@ index 4498a8c..8776874 100755
  count=`$GREP '^W ' $BASE/log/error_log | $GREP -v CreateProfile | $GREP -v 'libusb error' | $GREP -v ColorManager | $GREP -v 'Avahi client failed' | wc -l | awk '{print $1}'`
 -if test $count != 8; then
 -	echo "FAIL: $count warning messages, expected 8."
-+if test $count != 10; then
-+	echo "FAIL: $count warning messages, expected 10."
++if test $count != 9; then
++	echo "FAIL: $count warning messages, expected 9."
  	$GREP '^W ' $BASE/log/error_log
 -	echo "    <p>FAIL: $count warning messages, expected 8.</p>" >>$strfile
-+	echo "    <p>FAIL: $count warning messages, expected 10.</p>" >>$strfile
++	echo "    <p>FAIL: $count warning messages, expected 9.</p>" >>$strfile
  	echo "    <pre>" >>$strfile
  	$GREP '^W ' $BASE/log/error_log | sed -e '1,$s/&/&amp;/g' -e '1,$s/</&lt;/g' >>$strfile
  	echo "    </pre>" >>$strfile

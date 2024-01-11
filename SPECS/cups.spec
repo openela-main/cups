@@ -24,7 +24,7 @@ Summary: CUPS printing system
 Name: cups
 Epoch: 1
 Version: 2.3.3%{OP_VER}
-Release: 16%{?dist}.1
+Release: 21%{?dist}
 License: ASL 2.0
 Url: http://www.cups.org/
 # Apple stopped uploading the new versions into github, use OpenPrinting fork
@@ -112,8 +112,20 @@ Patch27: 0001-cups-tls-gnutls.c-Use-always-GNUTLS_SHUT_WR.patch
 Patch28: 0001-Update-man-pages-for-h-option-Issue-357.patch
 # CVE-2022-26691 cups: authorization bypass when using "local" authorization
 Patch29: 0001-scheduler-cert.c-Fix-string-comparison-fixes-CVE-202.patch
+# 2189919 - CGI scripts don't work with local Negotiate authentication
+Patch30: cups-local-negotiate.patch
+# 2217177 - Delays printing to lpd when reserved ports are exhausted
+Patch31: 0001-Fix-delays-printing-to-lpd-when-reserved-ports-are-e.patch
+# 2217284 - The command "cancel -x <job>" does not remove job files
+Patch32: 0001-Use-purge-job-instead-of-purge-jobs-when-canceling-a.patch
+# 2217954 - Enlarge backlog queue for listen() in cupsd
+Patch33: 0001-cups-http-addr.c-Set-listen-backlog-size-to-INT_MAX-.patch
+# CVE-2023-34241 cups: use-after-free in cupsdAcceptClient() in scheduler/client.c
+Patch34: 0001-Log-result-of-httpGetHostname-BEFORE-closing-the-con.patch
+# CVE-2023-32324 cups: heap buffer overflow may lead to DoS
+Patch35: 0001-cups-strlcpy-handle-zero-size.patch
 # CVE-2023-32360 cups:  Information leak through Cups-Get-Document operation
-Patch30: 0001-Require-authentication-for-CUPS-Get-Document.patch
+Patch36: 0001-Require-authentication-for-CUPS-Get-Document.patch
 
 
 ##### Patches removed because IMHO they aren't no longer needed
@@ -355,8 +367,20 @@ to CUPS daemon. This solution will substitute printer drivers and raw queues in 
 %patch28 -p1 -b .manpage-update
 # CVE-2022-26691 cups: authorization bypass when using "local" authorization
 %patch29 -p1 -b .cve26691
+# 2189919 - CGI scripts don't work with local Negotiate authentication
+%patch30 -p1 -b .local-negotiate
+# 2217177 - Delays printing to lpd when reserved ports are exhausted
+%patch31 -p1 -b .lpd-delay
+# 2217284 - The command "cancel -x <job>" does not remove job files
+%patch32 -p1 -b .purge-job
+# 2217954 - Enlarge backlog queue for listen() in cupsd
+%patch33 -p1 -b .listen-backlog
+# CVE-2023-34241 cups: use-after-free in cupsdAcceptClient() in scheduler/client.c
+%patch34 -p1 -b .cve34241
+# CVE-2023-32324 cups: heap buffer overflow may lead to DoS
+%patch35 -p1 -b .cve32324
 # CVE-2023-32360 cups: Information leak through Cups-Get-Document operation
-%patch30 -p1 -b .get-document-auth
+%patch36 -p1 -b .get-document-auth
 
 %if %{lspp}
 # LSPP support.
@@ -791,8 +815,29 @@ rm -f %{cups_serverbin}/backend/smb
 %{_mandir}/man7/ippeveps.7.gz
 
 %changelog
-* Tue Aug 15 2023 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-16.1
+* Tue Aug 29 2023 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-21
+- bump the spec because the previous build was made with buildroot 9.2
+
+* Tue Aug 29 2023 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-20
 - CVE-2023-32360 cups: Information leak through Cups-Get-Document operation
+
+* Thu Jun 29 2023 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-19
+- CVE-2023-34241 cups: use-after-free in cupsdAcceptClient() in scheduler/client.c
+- CVE-2023-32324 cups: heap buffer overflow may lead to DoS
+
+* Wed Jun 28 2023 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-19
+- 2217177 - Delays printing to lpd when reserved ports are exhausted
+- 2217284 - The command "cancel -x <job>" does not remove job files
+- 2217954 - Enlarge backlog queue for listen() in cupsd
+
+* Wed Apr 26 2023 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-18
+- 2189919 - CGI scripts don't work with local Negotiate authentication
+
+* Mon Apr 03 2023 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-17
+- RHEL-314 - Enable fmf tests in centos stream
+
+* Thu Mar 23 2023 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-17
+- RHEL-317 - upstream test suite fails due uncorrect number of expected warnings
 
 * Thu Jun 16 2022 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-16
 - CVE-2022-26691 cups: authorization bypass when using "local" authorization
