@@ -1,0 +1,12 @@
+diff -Napur cups-2.2.6-old/scheduler/job.c cups-2.2.6-new/scheduler/job.c
+--- cups-2.2.6-old/scheduler/job.c	2022-04-12 17:32:00.635282080 -0700
++++ cups-2.2.6-new/scheduler/job.c	2022-04-12 17:33:34.349452614 -0700
+@@ -474,7 +474,7 @@ cupsdCleanJobs(void)
+         cupsdLogJob(job, CUPSD_LOG_DEBUG, "Removing from history.");
+         cupsdDeleteJob(job, CUPSD_JOB_PURGE);
+       }
+-      else if (job->file_time && job->file_time <= curtime)
++      else if (job->file_time && job->file_time <= curtime && job->num_files > 0)
+       {
+         cupsdLogJob(job, CUPSD_LOG_DEBUG, "Removing document files.");
+         remove_job_files(job);

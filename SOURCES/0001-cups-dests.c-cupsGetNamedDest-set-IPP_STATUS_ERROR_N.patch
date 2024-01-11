@@ -1,0 +1,65 @@
+From 4ddeb8544e2e5c63a405d9e093ac24704f3deb03 Mon Sep 17 00:00:00 2001
+From: Zdenek Dohnal <zdohnal@redhat.com>
+Date: Tue, 21 Jul 2020 12:54:22 +0200
+Subject: [PATCH] cups/dests.c: cupsGetNamedDest() - set
+ IPP_STATUS_ERROR_NOT_FOUND error if queue was not found lp.c/lpr.c: check for
+ IPP_STATUS_ERROR_NOT_FOUND and generate a proper message if hit
+
+---
+ berkeley/lpr.c | 6 ++++++
+ cups/dest.c    | 3 +++
+ systemv/lp.c   | 6 ++++++
+ 3 files changed, 15 insertions(+)
+
+diff --git a/berkeley/lpr.c b/berkeley/lpr.c
+index 627fa6a4e..a8f78b881 100644
+--- a/berkeley/lpr.c
++++ b/berkeley/lpr.c
+@@ -234,6 +234,12 @@ main(int  argc,				/* I - Number of command-line arguments */
+ 		_cupsLangPrintf(stderr, _("%s: Error - add '/version=1.1' to server name."), argv[0]);
+ 		return (1);
+ 	      }
++	      else if (cupsLastError() == IPP_STATUS_ERROR_NOT_FOUND)
++	      {
++		_cupsLangPrintf(stderr,
++				_("%s: Error - The printer or class does not exist."), argv[0]);
++		return (1);
++	      }
+ 	      break;
+ 
+ 	  case '#' : /* Number of copies */
+diff --git a/cups/dest.c b/cups/dest.c
+index cde987a09..2017792a7 100644
+--- a/cups/dest.c
++++ b/cups/dest.c
+@@ -1839,7 +1839,10 @@ cupsGetNamedDest(http_t     *http,	/* I - Connection to server or @code CUPS_HTT
+       cupsEnumDests(0, 1000, NULL, 0, 0, (cups_dest_cb_t)cups_name_cb, &data);
+ 
+       if (!data.dest)
++      {
++        _cupsSetError(IPP_STATUS_ERROR_NOT_FOUND, _("The printer or class does not exist."), 1);
+         return (NULL);
++      }
+ 
+       dest = data.dest;
+     }
+diff --git a/systemv/lp.c b/systemv/lp.c
+index 298c15825..d918b4b14 100644
+--- a/systemv/lp.c
++++ b/systemv/lp.c
+@@ -161,6 +161,12 @@ main(int  argc,				/* I - Number of command-line arguments */
+ 				  "name."), argv[0]);
+ 		return (1);
+ 	      }
++	      else if (cupsLastError() == IPP_STATUS_ERROR_NOT_FOUND)
++	      {
++		_cupsLangPrintf(stderr,
++				_("%s: Error - The printer or class does not exist."), argv[0]);
++		return (1);
++	      }
+ 	      break;
+ 
+ 	  case 'f' : /* Form */
+-- 
+2.31.1
+
