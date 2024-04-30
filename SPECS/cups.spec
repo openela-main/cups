@@ -24,7 +24,7 @@ Summary: CUPS printing system
 Name: cups
 Epoch: 1
 Version: 2.3.3%{OP_VER}
-Release: 21%{?dist}
+Release: 24%{?dist}
 License: ASL 2.0
 Url: http://www.cups.org/
 # Apple stopped uploading the new versions into github, use OpenPrinting fork
@@ -126,6 +126,12 @@ Patch34: 0001-Log-result-of-httpGetHostname-BEFORE-closing-the-con.patch
 Patch35: 0001-cups-strlcpy-handle-zero-size.patch
 # CVE-2023-32360 cups:  Information leak through Cups-Get-Document operation
 Patch36: 0001-Require-authentication-for-CUPS-Get-Document.patch
+# RHEL-14931 cupsd memory leak in cupsdDeleteJob() with "PreserveJobHistory Off"
+Patch37: cups-preservejobfiles-leak.patch
+# RHEL-15308 cupsd fails to open cups-files.conf and the resulting error message is lost
+Patch38: 0001-scheduler-conf.c-Print-to-stderr-if-we-don-t-open-cu.patch
+# RHEL-19495 cupsGetJobs fails to connect if poll() gets POLLOUT|POLLHUP in revents
+Patch39: 0001-httpAddrConnect2-Check-for-error-if-POLLHUP-is-in-va.patch
 
 
 ##### Patches removed because IMHO they aren't no longer needed
@@ -381,6 +387,12 @@ to CUPS daemon. This solution will substitute printer drivers and raw queues in 
 %patch35 -p1 -b .cve32324
 # CVE-2023-32360 cups: Information leak through Cups-Get-Document operation
 %patch36 -p1 -b .get-document-auth
+# RHEL-14931 cupsd memory leak in cupsdDeleteJob() with "PreserveJobHistory Off"
+%patch37 -p1 -b .preservejobfiles-leak
+# RHEL-15308 cupsd fails to open cups-files.conf and the resulting error message is lost
+%patch38 -p1 -b .log-stderr
+# RHEL-19495 cupsGetJobs fails to connect if poll() gets POLLOUT|POLLHUP in revents
+%patch39 -p1 -b .cupsgetjobs-pollhup
 
 %if %{lspp}
 # LSPP support.
@@ -815,6 +827,17 @@ rm -f %{cups_serverbin}/backend/smb
 %{_mandir}/man7/ippeveps.7.gz
 
 %changelog
+* Mon Feb 26 2024 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-24
+- revert RHEL-19205 - new packages are not needed
+
+* Wed Dec 20 2023 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-23
+- RHEL-19205 Recommend new cups-filters subpackages with weak dep for better upgrade exp
+- RHEL-19495 cupsGetJobs fails to connect if poll() gets POLLOUT|POLLHUP in revents
+
+* Thu Nov 02 2023 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-22
+- RHEL-14931 cupsd memory leak in cupsdDeleteJob() with "PreserveJobHistory Off"
+- RHEL-15308 cupsd fails to open cups-files.conf and the resulting error message is lost
+
 * Tue Aug 29 2023 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-21
 - bump the spec because the previous build was made with buildroot 9.2
 
