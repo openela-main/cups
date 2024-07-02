@@ -1,0 +1,12 @@
+diff --git a/scheduler/org.cups.cupsd.service.in b/scheduler/org.cups.cupsd.service.in
+index c02412fb0..18b5e0386 100644
+--- a/scheduler/org.cups.cupsd.service.in
++++ b/scheduler/org.cups.cupsd.service.in
+@@ -2,6 +2,7 @@
+ Description=CUPS Scheduler
+ Documentation=man:cupsd(8)
+ After=network.target nss-user-lookup.target
++Requires=cups.socket
+ 
+ [Service]
+ ExecStart=@sbindir@/cupsd -l
