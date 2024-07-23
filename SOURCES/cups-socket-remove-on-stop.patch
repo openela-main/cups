@@ -1,0 +1,12 @@
+diff --git a/scheduler/cups.socket.in b/scheduler/cups.socket.in
+index 613b977a6..1deee826a 100644
+--- a/scheduler/cups.socket.in
++++ b/scheduler/cups.socket.in
+@@ -4,6 +4,7 @@ PartOf=org.cups.cupsd.service
+ 
+ [Socket]
+ ListenStream=@CUPS_DEFAULT_DOMAINSOCKET@
++RemoveOnStop=on
+ 
+ [Install]
+ WantedBy=sockets.target

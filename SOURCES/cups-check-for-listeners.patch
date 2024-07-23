@@ -1,0 +1,94 @@
+diff --git a/scheduler/conf.c b/scheduler/conf.c
+index c113eb3..77ce179 100644
+--- a/scheduler/conf.c
++++ b/scheduler/conf.c
+@@ -573,6 +573,18 @@ cupsdReadConfiguration(void)
+ 
+   cupsdDeleteAllListeners();
+ 
++ /*
++  * Allocate Listeners array
++  */
++
++  Listeners = cupsArrayNew(NULL, NULL);
++
++  if (!Listeners)
++  {
++    fprintf(stderr, "Unable to allocate memory for array Listeners.\n");
++    return (0);
++  }
++
+   old_remote_port = RemotePort;
+   RemotePort      = 0;
+ 
+@@ -1080,28 +1092,6 @@ cupsdReadConfiguration(void)
+     }
+   }
+ 
+- /*
+-  * Check that we have at least one listen/port line; if not, report this
+-  * as an error and exit!
+-  */
+-
+-  if (cupsArrayCount(Listeners) == 0)
+-  {
+-   /*
+-    * No listeners!
+-    */
+-
+-    cupsdLogMessage(CUPSD_LOG_EMERG,
+-                    "No valid Listen or Port lines were found in the "
+-		    "configuration file.");
+-
+-   /*
+-    * Commit suicide...
+-    */
+-
+-    cupsdEndProcess(getpid(), 0);
+-  }
+-
+  /*
+   * Set the default locale using the language and charset...
+   */
+@@ -3162,17 +3152,6 @@ read_cupsd_conf(cups_file_t *fp)	/* I - File to read from */
+         * Allocate another listener...
+ 	*/
+ 
+-        if (!Listeners)
+-	  Listeners = cupsArrayNew(NULL, NULL);
+-
+-	if (!Listeners)
+-	{
+-          cupsdLogMessage(CUPSD_LOG_ERROR,
+-	                  "Unable to allocate %s at line %d - %s.",
+-	                  line, linenum, strerror(errno));
+-          break;
+-	}
+-
+         if ((lis = calloc(1, sizeof(cupsd_listener_t))) == NULL)
+ 	{
+           cupsdLogMessage(CUPSD_LOG_ERROR,
+diff --git a/scheduler/main.c b/scheduler/main.c
+index a6e2c3a..b935c52 100644
+--- a/scheduler/main.c
++++ b/scheduler/main.c
+@@ -2113,6 +2113,21 @@ service_checkin(void)
+     service_add_listener(fd, 0);
+   }
+ #endif /* HAVE_LAUNCHD */
++
++  if (cupsArrayCount(Listeners) == 0)
++  {
++   /*
++    * No listeners!
++    */
++
++    cupsdLogMessage(CUPSD_LOG_EMERG, "No listener sockets present.");
++
++   /*
++    * Commit suicide...
++    */
++
++    cupsdEndProcess(getpid(), 0);
++  }
+ }
