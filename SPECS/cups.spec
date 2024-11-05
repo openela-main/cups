@@ -22,7 +22,7 @@ Summary: CUPS printing system
 Name: cups
 Epoch: 1
 Version: 2.2.6
-Release: 60%{?dist}
+Release: 61%{?dist}
 License: GPLv2+ and LGPLv2 with exceptions and AML
 Url: http://www.cups.org/
 Source0: https://github.com/apple/cups/releases/download/v%{VERSION}/cups-%{VERSION}-source.tar.gz
@@ -935,6 +935,10 @@ rm -f %{cups_serverbin}/backend/smb
 %{_mandir}/man5/ipptoolfile.5.gz
 
 %changelog
+* Thu Aug 15 2024 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-61
+- RHEL-54038 cups source rpm doesn't actually build lspp support
+- fix memory leaks caused by lspp
+
 * Tue Jun 18 2024 Pavol Zacik <pzacik@redhat.com>  - 1:2.2.6-60
 - RHEL-40386 cups: Cupsd Listen arbitrary chmod 0140777
 - Delete the domain socket file after stopping the cups.socket service
