@@ -24,7 +24,7 @@ Summary: CUPS printing system
 Name: cups
 Epoch: 1
 Version: 2.3.3%{OP_VER}
-Release: 27%{?dist}
+Release: 30%{?dist}
 License: ASL 2.0
 Url: http://www.cups.org/
 # Apple stopped uploading the new versions into github, use OpenPrinting fork
@@ -132,19 +132,24 @@ Patch37: cups-preservejobfiles-leak.patch
 Patch38: 0001-scheduler-conf.c-Print-to-stderr-if-we-don-t-open-cu.patch
 # RHEL-19495 cupsGetJobs fails to connect if poll() gets POLLOUT|POLLHUP in revents
 Patch39: 0001-httpAddrConnect2-Check-for-error-if-POLLHUP-is-in-va.patch
-# RHEL-40388 CVE-2024-35235 cups: Cupsd Listen arbitrary chmod 0140777
+# https://github.com/OpenPrinting/cups/pull/927
+Patch40: 0001-scheduler-Fix-sending-response-headers-to-client.patch
+# RHEL-32727 lpoptions with root writes to ~/.cups/lpoptions
+# https://github.com/OpenPrinting/cups/pull/456
+Patch41: 0001-cups-dest.c-Write-data-into-etc-cups-lpoptions-if-we.patch
+# RHEL-39940 CVE-2024-35235 cups: Cupsd Listen arbitrary chmod 0140777
 # https://github.com/OpenPrinting/cups/commit/a436956
-Patch40: 0001-Fix-domain-socket-handling.patch
-# RHEL-40388 CVE-2024-35235 cups: Cupsd Listen arbitrary chmod 0140777
+Patch42: 0001-Fix-domain-socket-handling.patch
+# RHEL-39940 CVE-2024-35235 cups: Cupsd Listen arbitrary chmod 0140777
 # https://github.com/OpenPrinting/cups/commit/3448c52
-Patch41: cups-socket-remove-on-stop.patch
-# RHEL-40388 CVE-2024-35235 cups: Cupsd Listen arbitrary chmod 0140777
+Patch43: cups-socket-remove-on-stop.patch
+# RHEL-39940 CVE-2024-35235 cups: Cupsd Listen arbitrary chmod 0140777
 # https://github.com/OpenPrinting/cups/commit/7adb508
 # https://github.com/OpenPrinting/cups/commit/824f49f
 # https://github.com/OpenPrinting/cups/commit/56b9728
 # https://github.com/OpenPrinting/cups/commit/74f437b
 # https://github.com/OpenPrinting/cups/commit/fb0c914
-Patch42: cups-check-for-listeners.patch
+Patch44: cups-check-for-listeners.patch
 
 
 ##### Patches removed because IMHO they aren't no longer needed
@@ -406,19 +411,23 @@ to CUPS daemon. This solution will substitute printer drivers and raw queues in 
 %patch38 -p1 -b .log-stderr
 # RHEL-19495 cupsGetJobs fails to connect if poll() gets POLLOUT|POLLHUP in revents
 %patch39 -p1 -b .cupsgetjobs-pollhup
-# RHEL-40388 CVE-2024-35235 cups: Cupsd Listen arbitrary chmod 0140777
+# https://github.com/OpenPrinting/cups/pull/927
+%patch40 -p1 -b .sent-headers
+# RHEL-32727 lpoptions with root writes to ~/.cups/lpoptions
+%patch41 -p1 -b .root-lpoptions
+# RHEL-39940 CVE-2024-35235 cups: Cupsd Listen arbitrary chmod 0140777
 # https://github.com/OpenPrinting/cups/commit/a436956
-%patch40 -p1 -b .cve2024-35235
-# RHEL-40388 CVE-2024-35235 cups: Cupsd Listen arbitrary chmod 0140777
+%patch42 -p1 -b .cve2024-35235
+# RHEL-39940 CVE-2024-35235 cups: Cupsd Listen arbitrary chmod 0140777
 # https://github.com/OpenPrinting/cups/commit/3448c52
-%patch41 -p1 -b .cups-socket-remove-on-stop.patch
-# RHEL-40388 CVE-2024-35235 cups: Cupsd Listen arbitrary chmod 0140777
+%patch43 -p1 -b .cups-socket-remove-on-stop.patch
+# RHEL-39940 CVE-2024-35235 cups: Cupsd Listen arbitrary chmod 0140777
 # https://github.com/OpenPrinting/cups/commit/7adb508
 # https://github.com/OpenPrinting/cups/commit/824f49f
 # https://github.com/OpenPrinting/cups/commit/56b9728
 # https://github.com/OpenPrinting/cups/commit/74f437b
 # https://github.com/OpenPrinting/cups/commit/fb0c914
-%patch42 -p1 -b .cups-check-for-listeners.patch
+%patch44 -p1 -b .cups-check-for-listeners.patch
 
 %if %{lspp}
 # LSPP support.
@@ -853,16 +862,26 @@ rm -f %{cups_serverbin}/backend/smb
 %{_mandir}/man7/ippeveps.7.gz
 
 %changelog
-* Wed Jun 19 2024 Pavol Zacik <pzacik@redhat.com> - 1:2.3.3op2-27
+* Thu Aug 15 2024 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-30
+- RHEL-6526 cups source rpm doesn't actually build lspp support
+- fix memory leaks from LSPP
+
+* Wed Jun 19 2024 Pavol Zacik <pzacik@redhat.com> - 1:2.3.3op2-29
 - Revert the cups-libs license identifier to the "legacy" format
 
-* Tue Jun 18 2024 Pavol Zacik <pzacik@redhat.com> - 1:2.3.3op2-26
-- RHEL-40388 cups: Cupsd Listen arbitrary chmod 0140777
+* Tue Jun 18 2024 Pavol Zacik <pzacik@redhat.com> - 1:2.3.3op2-28
+- RHEL-39940 cups: Cupsd Listen arbitrary chmod 0140777
 - Delete the domain socket file after stopping the cups.socket service
 - Fix cupsd Listener checks
 
-* Mon Jun 10 2024 Pavol Zacik <pzacik@redhat.com> - 1:2.3.3op2-25
+* Mon Jun 10 2024 Pavol Zacik <pzacik@redhat.com> - 1:2.3.3op2-27
 - CVE-2024-35235 cups: Cupsd Listen arbitrary chmod 0140777
+
+* Mon Apr 15 2024 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-26
+- RHEL-32727 lpoptions with root writes to ~/.cups/lpoptions
+
+* Fri Apr 05 2024 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-25
+- RHEL-29764 cups doesn't send Content-Type header back to client when Set-Cookie is seen first
 
 * Mon Feb 26 2024 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-24
 - revert RHEL-19205 - new packages are not needed
