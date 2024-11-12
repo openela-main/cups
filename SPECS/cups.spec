@@ -24,7 +24,7 @@ Summary: CUPS printing system
 Name: cups
 Epoch: 1
 Version: 2.3.3%{OP_VER}
-Release: 30%{?dist}
+Release: 31%{?dist}
 License: ASL 2.0
 Url: http://www.cups.org/
 # Apple stopped uploading the new versions into github, use OpenPrinting fork
@@ -150,6 +150,12 @@ Patch43: cups-socket-remove-on-stop.patch
 # https://github.com/OpenPrinting/cups/commit/74f437b
 # https://github.com/OpenPrinting/cups/commit/fb0c914
 Patch44: cups-check-for-listeners.patch
+# RHEL-60343 CVE-2024-47175 cups: remote command injection via attacker controlled data in PPD file
+Patch45: 0001-mirror-ipp-everywhere-printer-changes-from-master.patch
+Patch46: 0001-refactor-make-and-model-code.patch
+Patch47: 0001-ppdize-preset-and-template-names.patch
+Patch48: 0001-quote-ppd-localized-strings.patch
+Patch49: 0001-fix-warnings-for-unused-vars.patch
 
 
 ##### Patches removed because IMHO they aren't no longer needed
@@ -428,6 +434,13 @@ to CUPS daemon. This solution will substitute printer drivers and raw queues in 
 # https://github.com/OpenPrinting/cups/commit/74f437b
 # https://github.com/OpenPrinting/cups/commit/fb0c914
 %patch44 -p1 -b .cups-check-for-listeners.patch
+# RHEL-60343 CVE-2024-47175 cups: remote command injection via attacker controlled data in PPD file
+%patch45 -p1 -b .ippeve-validate
+%patch46 -p1 -b .make-model-refact
+%patch47 -p1 -b .ppdize-presets
+%patch48 -p1 -b .quote-ppd-strings
+%patch49 -p1 -b .fix-warn
+
 
 %if %{lspp}
 # LSPP support.
@@ -862,6 +875,9 @@ rm -f %{cups_serverbin}/backend/smb
 %{_mandir}/man7/ippeveps.7.gz
 
 %changelog
+* Tue Oct 01 2024 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-31
+- RHEL-60343 CVE-2024-47175 cups: remote command injection via attacker controlled data in PPD file
+
 * Thu Aug 15 2024 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-30
 - RHEL-6526 cups source rpm doesn't actually build lspp support
 - fix memory leaks from LSPP
