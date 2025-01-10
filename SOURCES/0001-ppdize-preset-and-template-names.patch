@@ -1,0 +1,41 @@
+From e0630cd18f76340d302000f2bf6516e99602b844 Mon Sep 17 00:00:00 2001
+From: Michael R Sweet <msweet@msweet.org>
+Date: Mon, 9 Sep 2024 15:59:57 -0400
+Subject: [PATCH] PPDize preset and template names.
+
+---
+ cups/ppd-cache.c | 33 ++++++++++++++++++++++++---------
+ 1 file changed, 24 insertions(+), 9 deletions(-)
+
+diff --git a/cups/ppd-cache.c b/cups/ppd-cache.c
+index 986c64f73..18c38d0ee 100644
+--- a/cups/ppd-cache.c
++++ b/cups/ppd-cache.c
+@@ -5543,7 +5552,7 @@ pwg_ppdize_name(const char *ipp,	/* I - IPP keyword */
+ 	*end;				/* End of name buffer */
+ 
+ 
+-  if (!ipp)
++  if (!ipp || !_cups_isalnum(*ipp))
+   {
+     *name = '\0';
+     return;
+@@ -5558,8 +5567,14 @@ pwg_ppdize_name(const char *ipp,	/* I - IPP keyword */
+       ipp ++;
+       *ptr++ = (char)toupper(*ipp++ & 255);
+     }
+-    else
++    else if (*ipp == '_' || *ipp == '.' || *ipp == '-' || _cups_isalnum(*ipp))
++    {
+       *ptr++ = *ipp++;
++    }
++    else
++    {
++      ipp ++;
++    }
+   }
+ 
+   *ptr = '\0';
+-- 
+2.46.1
+

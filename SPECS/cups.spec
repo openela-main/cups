@@ -22,7 +22,7 @@ Summary: CUPS printing system
 Name: cups
 Epoch: 1
 Version: 2.2.6
-Release: 61%{?dist}
+Release: 62%{?dist}
 License: GPLv2+ and LGPLv2 with exceptions and AML
 Url: http://www.cups.org/
 Source0: https://github.com/apple/cups/releases/download/v%{VERSION}/cups-%{VERSION}-source.tar.gz
@@ -186,6 +186,11 @@ Patch91: cups-socket-remove-on-stop.patch
 # https://github.com/OpenPrinting/cups/commit/74f437b
 # https://github.com/OpenPrinting/cups/commit/fb0c914
 Patch92: cups-check-for-listeners.patch
+# RHEL-60338 CVE-2024-47175 cups: remote command injection via attacker controlled data in PPD file
+Patch93: 0001-mirror-ipp-everywhere-printer-changes-from-master.patch
+Patch94: 0001-refactor-make-and-model-code.patch
+Patch95: 0001-ppdize-preset-and-template-names.patch
+Patch96: 0001-Fix-make-and-model-whitespace-trimming-Issue-1096.patch
 
 Patch1000: cups-lspp.patch
 
@@ -509,6 +514,12 @@ Sends IPP requests to the specified URI and tests and/or displays the results.
 # https://github.com/OpenPrinting/cups/commit/74f437b
 # https://github.com/OpenPrinting/cups/commit/fb0c914
 %patch92 -p1 -b .cups-check-for-listeners
+# RHEL-60338 CVE-2024-47175 cups: remote command injection via attacker controlled data in PPD file
+%patch93 -p1 -b .ippeve-validate
+%patch94 -p1 -b .make-model-refact
+%patch95 -p1 -b .ppdize-presets
+%patch96 -p1 -b .make-model-trim
+
 
 sed -i -e '1iMaxLogSize 0' conf/cupsd.conf.in
 
@@ -935,6 +946,9 @@ rm -f %{cups_serverbin}/backend/smb
 %{_mandir}/man5/ipptoolfile.5.gz
 
 %changelog
+* Fri Oct 25 2024 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-62
+- RHEL-60338 CVE-2024-47175 cups: remote command injection via attacker controlled data in PPD file
+
 * Thu Aug 15 2024 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-61
 - RHEL-54038 cups source rpm doesn't actually build lspp support
 - fix memory leaks caused by lspp
