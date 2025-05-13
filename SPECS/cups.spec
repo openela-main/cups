@@ -24,7 +24,7 @@ Summary: CUPS printing system
 Name: cups
 Epoch: 1
 Version: 2.3.3%{OP_VER}
-Release: 31%{?dist}
+Release: 33%{?dist}
 License: ASL 2.0
 Url: http://www.cups.org/
 # Apple stopped uploading the new versions into github, use OpenPrinting fork
@@ -156,6 +156,11 @@ Patch46: 0001-refactor-make-and-model-code.patch
 Patch47: 0001-ppdize-preset-and-template-names.patch
 Patch48: 0001-quote-ppd-localized-strings.patch
 Patch49: 0001-fix-warnings-for-unused-vars.patch
+# RHEL-68414 Inability to disable weak ciphers in CUPS configuration
+# patches: 0001-tls-gnutls.c-Use-system-crypto-policy-if-available.patch
+#          0001-Add-NoSystem-SSLOptions-value.patch
+Patch50: 0001-tls-gnutls.c-Use-system-crypto-policy-if-available.patch
+Patch51: 0001-Add-NoSystem-SSLOptions-value.patch
 
 
 ##### Patches removed because IMHO they aren't no longer needed
@@ -440,6 +445,9 @@ to CUPS daemon. This solution will substitute printer drivers and raw queues in 
 %patch47 -p1 -b .ppdize-presets
 %patch48 -p1 -b .quote-ppd-strings
 %patch49 -p1 -b .fix-warn
+# RHEL-68414 Inability to disable weak ciphers in CUPS configuration
+%patch50 -p1 -b .tls-system
+%patch51 -p1 -b .ssl-nosystem
 
 
 %if %{lspp}
@@ -662,6 +670,36 @@ done
 
 %{_sbindir}/upgrade_get_document
 
+# to prevent possible breakage due starting following system crypto policy
+# within minor releases
+# SSLOptions in cupsd.conf influences what SSL cupsd daemon will offer to clients,
+# SSLOptions in client.conf influences what SSL clients using libcups will use to
+# connect with destionation (destination can be other cupsd or printer)
+for conf in %{_sysconfdir}/cups/cupsd.conf %{_sysconfdir}/cups/client.conf
+do
+  # do not update anything if we already put changes into the file
+  if ! grep -q "# RHEL-68414 Fix" ${conf}
+  then
+    # backup the file if there is no rpmsave already
+    if ! test -f ${conf}.rpmsave
+    then
+      cp ${conf}{,.rpmsave}
+    fi
+
+    # two situations can happen:
+    # - no SSLOptions in the file - just put the new lines into file
+    # - SSLOptions already exists in the file - we append NoSystem to the
+    #   directive
+    if ! grep -q "^\s*SSLOptions" ${conf}
+    then
+      echo -e "# RHEL-68414 Fix\nSSLOptions NoSystem\n" >> ${conf}
+    else
+      # captures the group into \1, which can be later used
+      sed -i 's,^\s*SSLOptions \(.*\)$,# RHEL-68414 Fix\nSSLOptions \1 NoSystem,' ${conf}
+    fi
+  fi
+done
+
 exit 0
 
 %post client
@@ -875,6 +913,12 @@ rm -f %{cups_serverbin}/backend/smb
 %{_mandir}/man7/ippeveps.7.gz
 
 %changelog
+* Wed Jan 08 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-33
+- Add NoSystem SSLOptions value
+
+* Mon Dec 09 2024 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-32
+- RHEL-68414 Inability to disable weak ciphers in CUPS configuration
+
 * Tue Oct 01 2024 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-31
 - RHEL-60343 CVE-2024-47175 cups: remote command injection via attacker controlled data in PPD file
 
