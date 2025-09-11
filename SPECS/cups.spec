@@ -22,7 +22,7 @@ Summary: CUPS printing system
 Name: cups
 Epoch: 1
 Version: 2.2.6
-Release: 62%{?dist}
+Release: 63%{?dist}
 License: GPLv2+ and LGPLv2 with exceptions and AML
 Url: http://www.cups.org/
 Source0: https://github.com/apple/cups/releases/download/v%{VERSION}/cups-%{VERSION}-source.tar.gz
@@ -191,6 +191,8 @@ Patch93: 0001-mirror-ipp-everywhere-printer-changes-from-master.patch
 Patch94: 0001-refactor-make-and-model-code.patch
 Patch95: 0001-ppdize-preset-and-template-names.patch
 Patch96: 0001-Fix-make-and-model-whitespace-trimming-Issue-1096.patch
+# RHEL-112424 CVE-2025-58060 cups: Authentication Bypass in CUPS Authorization Handling
+Patch97: CVE-2025-58060.patch
 
 Patch1000: cups-lspp.patch
 
@@ -519,6 +521,8 @@ Sends IPP requests to the specified URI and tests and/or displays the results.
 %patch94 -p1 -b .make-model-refact
 %patch95 -p1 -b .ppdize-presets
 %patch96 -p1 -b .make-model-trim
+# RHEL-112424 CVE-2025-58060 cups: Authentication Bypass in CUPS Authorization Handling
+%patch97 -p1 -b .cve-2025-58060
 
 
 sed -i -e '1iMaxLogSize 0' conf/cupsd.conf.in
@@ -946,6 +950,9 @@ rm -f %{cups_serverbin}/backend/smb
 %{_mandir}/man5/ipptoolfile.5.gz
 
 %changelog
+* Thu Sep 04 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-63
+- RHEL-112424 CVE-2025-58060 cups: Authentication Bypass in CUPS Authorization Handling
+
 * Fri Oct 25 2024 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-62
 - RHEL-60338 CVE-2024-47175 cups: remote command injection via attacker controlled data in PPD file
 
