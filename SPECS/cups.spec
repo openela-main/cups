@@ -24,7 +24,7 @@ Summary: CUPS printing system
 Name: cups
 Epoch: 1
 Version: 2.3.3%{OP_VER}
-Release: 33%{?dist}.1
+Release: 34%{?dist}
 License: ASL 2.0
 Url: http://www.cups.org/
 # Apple stopped uploading the new versions into github, use OpenPrinting fork
@@ -161,9 +161,9 @@ Patch49: 0001-fix-warnings-for-unused-vars.patch
 #          0001-Add-NoSystem-SSLOptions-value.patch
 Patch50: 0001-tls-gnutls.c-Use-system-crypto-policy-if-available.patch
 Patch51: 0001-Add-NoSystem-SSLOptions-value.patch
-# RHEL-112438 CVE-2025-58060 cups: Authentication Bypass in CUPS Authorization Handling
+# RHEL-112435 CVE-2025-58060 cups: Authentication Bypass in CUPS Authorization Handling
 Patch52: CVE-2025-58060.patch
-# RHEL-113077 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
+# RHEL-113078 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
 Patch53: CVE-2025-58364.patch
 
 
@@ -452,9 +452,9 @@ to CUPS daemon. This solution will substitute printer drivers and raw queues in 
 # RHEL-68414 Inability to disable weak ciphers in CUPS configuration
 %patch50 -p1 -b .tls-system
 %patch51 -p1 -b .ssl-nosystem
-# RHEL-112438 CVE-2025-58060 cups: Authentication Bypass in CUPS Authorization Handling
+# RHEL-112435 CVE-2025-58060 cups: Authentication Bypass in CUPS Authorization Handling
 %patch52 -p1 -b .cve-2025-58060
-# RHEL-113077 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
+# RHEL-113078 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
 %patch53 -p1 -b .cve-2025-58364
 
 
@@ -921,11 +921,9 @@ rm -f %{cups_serverbin}/backend/smb
 %{_mandir}/man7/ippeveps.7.gz
 
 %changelog
-* Fri Sep 05 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1.2.3.3op2-33.1
-- RHEL-113077 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
-
-* Thu Sep 04 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1.2.3.3op2-33.1
-- RHEL-112438 CVE-2025-58060 cups: Authentication Bypass in CUPS Authorization Handling
+* Thu Sep 11 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1.2.3.3op2-34
+- RHEL-112435 CVE-2025-58060 cups: Authentication Bypass in CUPS Authorization Handling
+- RHEL-113078 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
 
 * Wed Jan 08 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-33
 - Add NoSystem SSLOptions value
