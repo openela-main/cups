@@ -22,7 +22,7 @@ Summary: CUPS printing system
 Name: cups
 Epoch: 1
 Version: 2.2.6
-Release: 63%{?dist}
+Release: 64%{?dist}
 License: GPLv2+ and LGPLv2 with exceptions and AML
 Url: http://www.cups.org/
 Source0: https://github.com/apple/cups/releases/download/v%{VERSION}/cups-%{VERSION}-source.tar.gz
@@ -193,6 +193,8 @@ Patch95: 0001-ppdize-preset-and-template-names.patch
 Patch96: 0001-Fix-make-and-model-whitespace-trimming-Issue-1096.patch
 # RHEL-112424 CVE-2025-58060 cups: Authentication Bypass in CUPS Authorization Handling
 Patch97: CVE-2025-58060.patch
+# RHEL-122666 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
+Patch98: CVE-2025-58364.patch
 
 Patch1000: cups-lspp.patch
 
@@ -523,6 +525,8 @@ Sends IPP requests to the specified URI and tests and/or displays the results.
 %patch96 -p1 -b .make-model-trim
 # RHEL-112424 CVE-2025-58060 cups: Authentication Bypass in CUPS Authorization Handling
 %patch97 -p1 -b .cve-2025-58060
+# RHEL-122666 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
+%patch98 -p1 -b .cve-2025-58364
 
 
 sed -i -e '1iMaxLogSize 0' conf/cupsd.conf.in
@@ -950,6 +954,9 @@ rm -f %{cups_serverbin}/backend/smb
 %{_mandir}/man5/ipptoolfile.5.gz
 
 %changelog
+* Wed Oct 22 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-64
+- RHEL-122666 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
+
 * Thu Sep 04 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-63
 - RHEL-112424 CVE-2025-58060 cups: Authentication Bypass in CUPS Authorization Handling
 
