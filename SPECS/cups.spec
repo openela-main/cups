@@ -24,7 +24,7 @@ Summary: CUPS printing system
 Name: cups
 Epoch: 1
 Version: 2.3.3%{OP_VER}
-Release: 34%{?dist}
+Release: 34%{?dist}.2
 License: ASL 2.0
 Url: http://www.cups.org/
 # Apple stopped uploading the new versions into github, use OpenPrinting fork
@@ -165,6 +165,21 @@ Patch51: 0001-Add-NoSystem-SSLOptions-value.patch
 Patch52: CVE-2025-58060.patch
 # RHEL-113078 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
 Patch53: CVE-2025-58364.patch
+# RHEL-129746 CVE-2025-58436 cups: Slow client communication leads to a possible DoS attack
+# 0001-_httpWait-s-usessl-parameter-wasn-t-being-used.patch
+# cups-CVE-2025-58436.patch
+# 0001-Fix-an-infinite-loop-issue-in-GTK-Issue-1439.patch
+Patch54: 0001-_httpWait-s-usessl-parameter-wasn-t-being-used.patch
+Patch55: cups-CVE-2025-58436.patch
+Patch56: 0001-Fix-an-infinite-loop-issue-in-GTK-Issue-1439.patch
+# RHEL-129738 CVE-2025-61915 cups: Local denial-of-service via cupsd.conf update and related issues
+# 0001-Fix-various-issues-in-cupsd.patch
+# 0001-conf.c-Fix-stopping-scheduler-on-unknown-directive.patch
+Patch57: 0001-Fix-various-issues-in-cupsd.patch
+Patch58: 0001-conf.c-Fix-stopping-scheduler-on-unknown-directive.patch
+# fix use-after-free reported by OSH
+# https://github.com/OpenPrinting/cups/pull/1454
+Patch59: 0001-scheduler-Fix-possible-use_after_free-in-cupsdReadCl.patch
 
 
 ##### Patches removed because IMHO they aren't no longer needed
@@ -456,6 +471,15 @@ to CUPS daemon. This solution will substitute printer drivers and raw queues in 
 %patch52 -p1 -b .cve-2025-58060
 # RHEL-113078 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
 %patch53 -p1 -b .cve-2025-58364
+# RHEL-129746 CVE-2025-58436 cups: Slow client communication leads to a possible DoS attack
+%patch54 -p1 -b .use-usessl
+%patch55 -p1 -b .slow-client
+%patch56 -p1 -b .gtk-infinite-loop
+# RHEL-129738 CVE-2025-61915 cups: Local denial-of-service via cupsd.conf update and related issues
+%patch57 -p1 -b .config-issues
+%patch58 -p1 -b .ignore-unknown
+# fix use-after-free reported by OSH
+%patch59 -p1 -b .osh-use-after-free
 
 
 %if %{lspp}
@@ -921,7 +945,14 @@ rm -f %{cups_serverbin}/backend/smb
 %{_mandir}/man7/ippeveps.7.gz
 
 %changelog
-* Thu Sep 11 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1.2.3.3op2-34
+* Fri Dec 12 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-34.2
+- fix use-after-free reported by OSH
+
+* Tue Dec 09 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-34.1
+- RHEL-129746 CVE-2025-58436 cups: Slow client communication leads to a possible DoS attack
+- RHEL-129738 CVE-2025-61915 cups: Local denial-of-service via cupsd.conf update and related issues
+
+* Thu Sep 11 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-34
 - RHEL-112435 CVE-2025-58060 cups: Authentication Bypass in CUPS Authorization Handling
 - RHEL-113078 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
 
