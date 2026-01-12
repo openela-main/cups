@@ -1,0 +1,12 @@
+diff -up cups-2.4.10/cups/http.c.use-usessl cups-2.4.10/cups/http.c
+--- cups-2.4.10/cups/http.c.use-usessl	2024-06-18 13:11:05.000000000 +0200
++++ cups-2.4.10/cups/http.c	2025-12-04 14:23:30.019246588 +0100
+@@ -3033,7 +3033,7 @@ _httpWait(http_t *http,			/* I - HTTP co
+   */
+ 
+ #ifdef HAVE_TLS
+-  if (http->tls && _httpTLSPending(http))
++  if (usessl && http->tls && _httpTLSPending(http))
+   {
+     DEBUG_puts("5_httpWait: Return 1 since there is pending TLS data.");
+     return (1);
