@@ -22,7 +22,7 @@ Summary: CUPS printing system
 Name: cups
 Epoch: 1
 Version: 2.2.6
-Release: 64%{?dist}
+Release: 66%{?dist}
 License: GPLv2+ and LGPLv2 with exceptions and AML
 Url: http://www.cups.org/
 Source0: https://github.com/apple/cups/releases/download/v%{VERSION}/cups-%{VERSION}-source.tar.gz
@@ -193,8 +193,25 @@ Patch95: 0001-ppdize-preset-and-template-names.patch
 Patch96: 0001-Fix-make-and-model-whitespace-trimming-Issue-1096.patch
 # RHEL-112424 CVE-2025-58060 cups: Authentication Bypass in CUPS Authorization Handling
 Patch97: CVE-2025-58060.patch
-# RHEL-122666 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
+# RHEL-122045 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
 Patch98: CVE-2025-58364.patch
+# RHEL-129729 CVE-2025-58436 cups: Slow client communication leads to a possible DoS attack
+# 0001-_httpWait-s-usessl-parameter-wasn-t-being-used.patch
+# 0001-Setting-the-timeout-should-also-timeout-the-TLS-nego.patch
+# cups-CVE-2025-58436.patch
+# 0001-Fix-an-infinite-loop-issue-in-GTK-Issue-1439.patch
+Patch99: 0001-_httpWait-s-usessl-parameter-wasn-t-being-used.patch
+Patch100: 0001-Setting-the-timeout-should-also-timeout-the-TLS-nego.patch
+Patch101: cups-CVE-2025-58436.patch
+Patch102: 0001-Fix-an-infinite-loop-issue-in-GTK-Issue-1439.patch
+# RHEL-129720 CVE-2025-61915 cups: Local denial-of-service via cupsd.conf update and related issues
+# 0001-Fix-various-issues-in-cupsd.patch
+# 0001-conf.c-Fix-stopping-scheduler-on-unknown-directive.patch
+Patch103: 0001-Fix-various-issues-in-cupsd.patch
+Patch104: 0001-conf.c-Fix-stopping-scheduler-on-unknown-directive.patch
+# fix use-after-free reported by OSH
+# https://github.com/OpenPrinting/cups/pull/1454
+Patch105: 0001-scheduler-Fix-possible-use_after_free-in-cupsdReadCl.patch
 
 Patch1000: cups-lspp.patch
 
@@ -525,8 +542,18 @@ Sends IPP requests to the specified URI and tests and/or displays the results.
 %patch96 -p1 -b .make-model-trim
 # RHEL-112424 CVE-2025-58060 cups: Authentication Bypass in CUPS Authorization Handling
 %patch97 -p1 -b .cve-2025-58060
-# RHEL-122666 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
+# RHEL-122045 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
 %patch98 -p1 -b .cve-2025-58364
+# RHEL-129729 CVE-2025-58436 cups: Slow client communication leads to a possible DoS attack
+%patch99 -p1 -b .use-usessl
+%patch100 -p1 -b .timeout-tls
+%patch101 -p1 -b .slow-client
+%patch102 -p1 -b .gtk-infinite-loop
+# RHEL-129720 CVE-2025-61915 cups: Local denial-of-service via cupsd.conf update and related issues
+%patch103 -p1 -b .config-issues
+%patch104 -p1 -b .ignore-unknown
+# fix use-after-free reported by OSH
+%patch105 -p1 -b .osh-use-after-free
 
 
 sed -i -e '1iMaxLogSize 0' conf/cupsd.conf.in
@@ -954,8 +981,15 @@ rm -f %{cups_serverbin}/backend/smb
 %{_mandir}/man5/ipptoolfile.5.gz
 
 %changelog
+* Fri Dec 12 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-66
+- fix use-after-free reported by OSH
+
+* Tue Dec 09 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-65
+- RHEL-129729 CVE-2025-58436 cups: Slow client communication leads to a possible DoS attack
+- RHEL-129720 CVE-2025-61915 cups: Local denial-of-service via cupsd.conf update and related issues
+
 * Wed Oct 22 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-64
-- RHEL-122666 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
+- RHEL-122045 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
 
 * Thu Sep 04 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-63
 - RHEL-112424 CVE-2025-58060 cups: Authentication Bypass in CUPS Authorization Handling
