@@ -22,7 +22,7 @@ Summary: CUPS printing system
 Name: cups
 Epoch: 1
 Version: 2.2.6
-Release: 66%{?dist}
+Release: 67%{?dist}
 License: GPLv2+ and LGPLv2 with exceptions and AML
 Url: http://www.cups.org/
 Source0: https://github.com/apple/cups/releases/download/v%{VERSION}/cups-%{VERSION}-source.tar.gz
@@ -212,6 +212,8 @@ Patch104: 0001-conf.c-Fix-stopping-scheduler-on-unknown-directive.patch
 # fix use-after-free reported by OSH
 # https://github.com/OpenPrinting/cups/pull/1454
 Patch105: 0001-scheduler-Fix-possible-use_after_free-in-cupsdReadCl.patch
+# RHEL-147205 - endless poll loop in http_write when POLLHUP is returned
+Patch106: 0001-tls-gnutls.c-Do-not-check-for-errno-after-I-O-operat.patch
 
 Patch1000: cups-lspp.patch
 
@@ -554,6 +556,8 @@ Sends IPP requests to the specified URI and tests and/or displays the results.
 %patch104 -p1 -b .ignore-unknown
 # fix use-after-free reported by OSH
 %patch105 -p1 -b .osh-use-after-free
+# RHEL-147205 - endless poll loop in http_write when POLLHUP is returned
+%patch106 -p1 -b .httpwrite-endless-poll
 
 
 sed -i -e '1iMaxLogSize 0' conf/cupsd.conf.in
@@ -981,6 +985,9 @@ rm -f %{cups_serverbin}/backend/smb
 %{_mandir}/man5/ipptoolfile.5.gz
 
 %changelog
+* Fri Mar 06 2026 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-67
+- RHEL-147205 - endless poll loop in http_write when POLLHUP is returned
+
 * Fri Dec 12 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.2.6-66
 - fix use-after-free reported by OSH
 
