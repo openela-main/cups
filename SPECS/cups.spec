@@ -24,7 +24,7 @@ Summary: CUPS printing system
 Name: cups
 Epoch: 1
 Version: 2.3.3%{OP_VER}
-Release: 34%{?dist}.2
+Release: 37%{?dist}
 License: ASL 2.0
 Url: http://www.cups.org/
 # Apple stopped uploading the new versions into github, use OpenPrinting fork
@@ -165,21 +165,23 @@ Patch51: 0001-Add-NoSystem-SSLOptions-value.patch
 Patch52: CVE-2025-58060.patch
 # RHEL-113078 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
 Patch53: CVE-2025-58364.patch
-# RHEL-129746 CVE-2025-58436 cups: Slow client communication leads to a possible DoS attack
+# RHEL-102665 The KONICA MINOLTA C352 is not distributed using cups-browsed and the included ppd file
+# https://github.com/OpenPrinting/cups/commit/c0b8e48125044
+Patch54: 0001-Drop-non-keyword-characters-from-PPD-names-Issue-111.patch
+# RHEL-129747 CVE-2025-58436 cups: Slow client communication leads to a possible DoS attack
 # 0001-_httpWait-s-usessl-parameter-wasn-t-being-used.patch
 # cups-CVE-2025-58436.patch
 # 0001-Fix-an-infinite-loop-issue-in-GTK-Issue-1439.patch
-Patch54: 0001-_httpWait-s-usessl-parameter-wasn-t-being-used.patch
-Patch55: cups-CVE-2025-58436.patch
-Patch56: 0001-Fix-an-infinite-loop-issue-in-GTK-Issue-1439.patch
-# RHEL-129738 CVE-2025-61915 cups: Local denial-of-service via cupsd.conf update and related issues
+# 0001-scheduler-Fix-possible-use_after_free-in-cupsdReadCl.patch (use-after-free fix, OSH report)
+Patch55: 0001-_httpWait-s-usessl-parameter-wasn-t-being-used.patch
+Patch56: cups-CVE-2025-58436.patch
+Patch57: 0001-Fix-an-infinite-loop-issue-in-GTK-Issue-1439.patch
+Patch58: 0001-scheduler-Fix-possible-use_after_free-in-cupsdReadCl.patch
+# RHEL-129740 CVE-2025-61915 cups: Local denial-of-service via cupsd.conf update and related issues
 # 0001-Fix-various-issues-in-cupsd.patch
 # 0001-conf.c-Fix-stopping-scheduler-on-unknown-directive.patch
-Patch57: 0001-Fix-various-issues-in-cupsd.patch
-Patch58: 0001-conf.c-Fix-stopping-scheduler-on-unknown-directive.patch
-# fix use-after-free reported by OSH
-# https://github.com/OpenPrinting/cups/pull/1454
-Patch59: 0001-scheduler-Fix-possible-use_after_free-in-cupsdReadCl.patch
+Patch59: 0001-Fix-various-issues-in-cupsd.patch
+Patch60: 0001-conf.c-Fix-stopping-scheduler-on-unknown-directive.patch
 
 
 ##### Patches removed because IMHO they aren't no longer needed
@@ -205,6 +207,8 @@ BuildRequires: pkgconfig(dbus-1)
 BuildRequires: pkgconfig(gnutls)
 BuildRequires: pkgconfig(libsystemd)
 BuildRequires: pkgconfig(libusb-1.0)
+# Make sure we have __python3 macro
+BuildRequires: python-srpm-macros
 # Make sure we get postscriptdriver tags.
 BuildRequires: python3-cups
 BuildRequires: systemd
@@ -471,15 +475,17 @@ to CUPS daemon. This solution will substitute printer drivers and raw queues in 
 %patch52 -p1 -b .cve-2025-58060
 # RHEL-113078 CVE-2025-58364 cups: Null Pointer Dereference in CUPS ipp_read_io() Leading to Remote DoS
 %patch53 -p1 -b .cve-2025-58364
-# RHEL-129746 CVE-2025-58436 cups: Slow client communication leads to a possible DoS attack
-%patch54 -p1 -b .use-usessl
-%patch55 -p1 -b .slow-client
-%patch56 -p1 -b .gtk-infinite-loop
-# RHEL-129738 CVE-2025-61915 cups: Local denial-of-service via cupsd.conf update and related issues
-%patch57 -p1 -b .config-issues
-%patch58 -p1 -b .ignore-unknown
+# RHEL-102665 The KONICA MINOLTA C352 is not distributed using cups-browsed and the included ppd file
+%patch54 -p1 -b .drop-brackets
+# RHEL-129747 CVE-2025-58436 cups: Slow client communication leads to a possible DoS attack
+%patch55 -p1 -b .use-usessl
+%patch56 -p1 -b .slow-client
+%patch57 -p1 -b .gtk-infinite-loop
 # fix use-after-free reported by OSH
-%patch59 -p1 -b .osh-use-after-free
+%patch58 -p1 -b .osh-use-after-free
+# RHEL-129740 CVE-2025-61915 cups: Local denial-of-service via cupsd.conf update and related issues
+%patch59 -p1 -b .config-issues
+%patch60 -p1 -b .ignore-unknown
 
 
 %if %{lspp}
@@ -615,6 +621,8 @@ d %{_rundir}/cups 0755 root lp -
 d %{_rundir}/cups/certs 0511 lp sys -
 
 d /var/spool/cups/tmp - - - 30d
+
+d /var/log/cups 0755 root lp -
 EOF
 
 # /usr/lib/tmpfiles.d/cups-lp.conf (bug #812641)
@@ -844,7 +852,7 @@ rm -f %{cups_serverbin}/backend/smb
 %{_datadir}/pixmaps/cupsprinter.png
 %dir %attr(1770,root,lp) %{_localstatedir}/spool/cups/tmp
 %dir %attr(0710,root,lp) %{_localstatedir}/spool/cups
-%dir %attr(0755,lp,sys) %{_localstatedir}/log/cups
+%dir %attr(0755,root,lp) %{_localstatedir}/log/cups
 %{_mandir}/man[1578]/*
 # client subpackage
 %exclude %{_mandir}/man1/lp*.1.gz
@@ -945,12 +953,15 @@ rm -f %{cups_serverbin}/backend/smb
 %{_mandir}/man7/ippeveps.7.gz
 
 %changelog
-* Fri Dec 12 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-34.2
-- fix use-after-free reported by OSH
+* Fri Dec 12 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-37
+- RHEL-129747 CVE-2025-58436 cups: Slow client communication leads to a possible DoS attack
+- RHEL-129740 CVE-2025-61915 cups: Local denial-of-service via cupsd.conf update and related issues
 
-* Tue Dec 09 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-34.1
-- RHEL-129746 CVE-2025-58436 cups: Slow client communication leads to a possible DoS attack
-- RHEL-129738 CVE-2025-61915 cups: Local denial-of-service via cupsd.conf update and related issues
+* Tue Nov 18 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-36
+- RHEL-122629 [image-mode] Missing /var/log/cups
+
+* Thu Oct 02 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-35
+- RHEL-102665 The KONICA MINOLTA C352 is not distributed using cups-browsed and the included ppd file
 
 * Thu Sep 11 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-34
 - RHEL-112435 CVE-2025-58060 cups: Authentication Bypass in CUPS Authorization Handling
