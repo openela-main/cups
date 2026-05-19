@@ -1,0 +1,29 @@
+From c0b8e48125044510d6cd6858258a15fc742b97e0 Mon Sep 17 00:00:00 2001
+From: Michael R Sweet <msweet@msweet.org>
+Date: Wed, 2 Apr 2025 15:14:58 -0400
+Subject: [PATCH] Drop non-keyword characters from PPD names (Issue #1118)
+
+---
+ CHANGES.md       | 1 +
+ cups/ppd-cache.c | 7 +------
+ 2 files changed, 2 insertions(+), 6 deletions(-)
+
+diff --git a/cups/ppd-cache.c b/cups/ppd-cache.c
+index 5d61f7c9f..a4c2b4c5b 100644
+--- a/cups/ppd-cache.c
++++ b/cups/ppd-cache.c
+@@ -5680,11 +5680,6 @@ pwg_unppdize_name(const char *ppd,	/* I - PPD keyword */
+ 	nodash = 1;
+       }
+     }
+-    else
+-    {
+-      *ptr++ = *ppd;
+-      nodash = 0;
+-    }
+ 
+     if (nodash == 0)
+     {
+-- 
+2.50.1
+
