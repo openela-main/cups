@@ -24,7 +24,7 @@ Summary: CUPS printing system
 Name: cups
 Epoch: 1
 Version: 2.3.3%{OP_VER}
-Release: 37%{?dist}
+Release: 38%{?dist}
 License: ASL 2.0
 Url: http://www.cups.org/
 # Apple stopped uploading the new versions into github, use OpenPrinting fork
@@ -182,6 +182,8 @@ Patch58: 0001-scheduler-Fix-possible-use_after_free-in-cupsdReadCl.patch
 # 0001-conf.c-Fix-stopping-scheduler-on-unknown-directive.patch
 Patch59: 0001-Fix-various-issues-in-cupsd.patch
 Patch60: 0001-conf.c-Fix-stopping-scheduler-on-unknown-directive.patch
+# RHEL-147214 - endless poll loop in http_write when POLLHUP is returned
+Patch61: 0001-tls-gnutls.c-Do-not-check-for-errno-after-I-O-operat.patch
 
 
 ##### Patches removed because IMHO they aren't no longer needed
@@ -486,6 +488,8 @@ to CUPS daemon. This solution will substitute printer drivers and raw queues in 
 # RHEL-129740 CVE-2025-61915 cups: Local denial-of-service via cupsd.conf update and related issues
 %patch59 -p1 -b .config-issues
 %patch60 -p1 -b .ignore-unknown
+# RHEL-147214 - endless poll loop in http_write when POLLHUP is returned
+%patch61 -p1 -b .httpwrite-endless-poll
 
 
 %if %{lspp}
@@ -953,6 +957,9 @@ rm -f %{cups_serverbin}/backend/smb
 %{_mandir}/man7/ippeveps.7.gz
 
 %changelog
+* Mon Mar 09 2026 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-38
+- RHEL-147214 - endless poll loop in http_write when POLLHUP is returned
+
 * Fri Dec 12 2025 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-37
 - RHEL-129747 CVE-2025-58436 cups: Slow client communication leads to a possible DoS attack
 - RHEL-129740 CVE-2025-61915 cups: Local denial-of-service via cupsd.conf update and related issues
