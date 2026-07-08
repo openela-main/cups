@@ -1,0 +1,48 @@
+From da0ff58c041f7ee129c3c2c72fb14df1f1e4069a Mon Sep 17 00:00:00 2001
+From: Michael R Sweet <msweet@msweet.org>
+Date: Wed, 8 Apr 2026 16:43:25 -0400
+Subject: [PATCH] Fix get_options regression (Issue #1532)
+
+---
+ scheduler/job.c | 4 ++--
+ test/5.5-lp.sh  | 4 ++--
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/scheduler/job.c b/scheduler/job.c
+index 064e6c1c2a..7cc7195ef0 100644
+--- a/scheduler/job.c
++++ b/scheduler/job.c
+@@ -4120,7 +4120,7 @@ get_options(cupsd_job_t *job,		/* I - Job */
+ 	  case IPP_TAG_CHARSET :
+ 	  case IPP_TAG_LANGUAGE :
+ 	  case IPP_TAG_URI :
+-	      for (valptr = attr->values[i].string.text; *valptr;)
++	      for (valptr = attr->values[i].string.text; *valptr; valptr ++)
+ 	      {
+ 	       /*
+ 	        * Convert tabs and newlines to spaces, filter out control chars,
+@@ -4135,7 +4135,7 @@ get_options(cupsd_job_t *job,		/* I - Job */
+ 	        {
+ 	          if (strchr("\\\'\"", *valptr))
+ 		    *optptr++ = '\\';
+-		  *optptr++ = *valptr++;
++		  *optptr++ = *valptr;
+ 		}
+ 	      }
+ 
+diff --git a/test/5.5-lp.sh b/test/5.5-lp.sh
+index 25e9d65a33..fe60890305 100644
+--- a/test/5.5-lp.sh
++++ b/test/5.5-lp.sh
+@@ -62,9 +62,9 @@ while test $i -lt $1; do
+ 		j=`expr $j + 1`
+ 	done
+ 
+-	$VALGRIND ../systemv/lp -d Test1 testfile.jpg 2>&1 &
++	$VALGRIND ../systemv/lp -d Test1 -t "Flood Test $j" testfile.jpg 2>&1 &
+ 	pids="$pids $!"
+-	$VALGRIND ../systemv/lp -d Test2 testfile.jpg 2>&1 &
++	$VALGRIND ../systemv/lp -d Test2 -t "Flood Test $j" testfile.jpg 2>&1 &
+ 	pids="$pids $!"
+ 
+ 	i=`expr $i + 1`
