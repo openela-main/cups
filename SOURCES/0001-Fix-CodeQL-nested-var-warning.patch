@@ -1,0 +1,25 @@
+From 2b587cf81507f0c4b5cfeeee6658447857200ab9 Mon Sep 17 00:00:00 2001
+From: Michael R Sweet <msweet@msweet.org>
+Date: Tue, 31 Mar 2026 15:58:44 -0400
+Subject: [PATCH] Fix CodeQL nested var warning.
+
+---
+ scheduler/job.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/scheduler/job.c b/scheduler/job.c
+index 6599bfcf4..064e6c1c2 100644
+--- a/scheduler/job.c
++++ b/scheduler/job.c
+@@ -5406,8 +5406,7 @@ update_job(cupsd_job_t *job)		/* I - Job to check */
+       * Set PPD keyword(s)/value(s)...
+       */
+
+-      int		i,		/* Looping var */
+-			num_keywords;	/* Number of keywords */
++      int		num_keywords;	/* Number of keywords */
+       cups_option_t	*keywords,	/* Keywords */
+ 			*keyword;	/* Current keyword */
+ 
+-- 
+2.52.0

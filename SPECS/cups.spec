@@ -24,7 +24,7 @@ Summary: CUPS printing system
 Name: cups
 Epoch: 1
 Version: 2.3.3%{OP_VER}
-Release: 38%{?dist}
+Release: 39%{?dist}
 License: ASL 2.0
 Url: http://www.cups.org/
 # Apple stopped uploading the new versions into github, use OpenPrinting fork
@@ -184,6 +184,22 @@ Patch59: 0001-Fix-various-issues-in-cupsd.patch
 Patch60: 0001-conf.c-Fix-stopping-scheduler-on-unknown-directive.patch
 # RHEL-147214 - endless poll loop in http_write when POLLHUP is returned
 Patch61: 0001-tls-gnutls.c-Do-not-check-for-errno-after-I-O-operat.patch
+# RHEL-177957 CVE-2026-34980 cups: control character injection in option values
+# https://issues.redhat.com/browse/RHEL-177957
+# https://github.com/OpenPrinting/cups/commit/8d0f51cac24cb5bf949c5b6a221e51a150d982e3
+Patch62: 0001-Filter-out-control-characters-from-option-values.patch
+# https://github.com/OpenPrinting/cups/commit/c5ce534c03d0698509f3eb7ff90ca41610625570
+# Hardening for the same advisory - escape newlines/CR/backslashes in
+# cupsFileGetConf/PutConf (requires root alone, but reachable via CVE-2026-34980)
+# dropped CHANGES.md changes, dropped copyright date change
+Patch63: 0001-Updated-cupsFileGetConf-and-cupsFilePutConf-to-escap.patch
+# https://github.com/OpenPrinting/cups/commit/2b587cf81507f0c4b5cfeeee6658447857200ab9
+Patch64: 0001-Fix-CodeQL-nested-var-warning.patch
+# https://github.com/OpenPrinting/cups/commit/da0ff58c041f7ee129c3c2c72fb14df1f1e4069a
+# dropped copyright date change in test/5.5-lp.sh
+Patch65: 0001-Fix-get_options-regression-Issue-1532.patch
+# https://github.com/OpenPrinting/cups/commit/3f2bdc293243bca938c6de23ba50e6d783189629
+Patch66: 0001-Fix-filter-PPD-keyword-processing-Issue-1562.patch
 
 
 ##### Patches removed because IMHO they aren't no longer needed
@@ -490,6 +506,12 @@ to CUPS daemon. This solution will substitute printer drivers and raw queues in 
 %patch60 -p1 -b .ignore-unknown
 # RHEL-147214 - endless poll loop in http_write when POLLHUP is returned
 %patch61 -p1 -b .httpwrite-endless-poll
+# RHEL-177957 CVE-2026-34980
+%patch62 -p1 -b .cve-2026-34980-control-chars
+%patch63 -p1 -b .cve-2026-34980-conf-escape
+%patch64 -p1 -b .cve-2026-34980-codeql
+%patch65 -p1 -b .cve-2026-34980-get-options
+%patch66 -p1 -b .cve-2026-34980-ppd-keyword
 
 
 %if %{lspp}
@@ -957,6 +979,9 @@ rm -f %{cups_serverbin}/backend/smb
 %{_mandir}/man7/ippeveps.7.gz
 
 %changelog
+* Mon Jun 22 2026 RHEL Packaging Agent <redhat-ymir-agent@redhat.com> - 1:2.3.3op2-39
+- RHEL-177957 CVE-2026-34980 cups: control character injection in option values
+
 * Mon Mar 09 2026 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.3.3op2-38
 - RHEL-147214 - endless poll loop in http_write when POLLHUP is returned
 
