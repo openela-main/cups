@@ -22,7 +22,7 @@ Summary: CUPS printing system
 Name: cups
 Epoch: 1
 Version: 2.4.10
-Release: 17%{?dist}
+Release: 18%{?dist}
 # backend/failover.c - BSD-3-Clause
 # cups/md5* - Zlib
 # scheduler/colorman.c - Apache-2.0 WITH LLVM-exception AND BSD-2-Clause
@@ -129,6 +129,20 @@ Patch1021: 0001-conf.c-Fix-stopping-scheduler-on-unknown-directive.patch
 Patch1022: 0001-scheduler-Fix-possible-use_after_free-in-cupsdReadCl.patch
 # RHEL-154276 endless poll loop in http_write when POLLHUP is returned
 Patch1023: 0001-tls-gnutls.c-Do-not-check-for-errno-after-I-O-operat.patch
+# RHEL-177945 CVE-2026-34980 cups: control character injection in option values
+# https://issues.redhat.com/browse/RHEL-177945
+# https://github.com/OpenPrinting/cups/commit/8d0f51cac24cb5bf949c5b6a221e51a150d982e3
+Patch1024: 0001-Filter-out-control-characters-from-option-values.patch
+# https://github.com/OpenPrinting/cups/commit/c5ce534c03d0698509f3eb7ff90ca41610625570
+# Hardening for the same advisory - escape newlines/CR/backslashes in
+# cupsFileGetConf/PutConf (requires root alone, but reachable via CVE-2026-34980)
+# dropped CHANGES.md changes, dropped copyright date change
+Patch1025: 0001-Updated-cupsFileGetConf-and-cupsFilePutConf-to-escap.patch
+# https://github.com/OpenPrinting/cups/commit/da0ff58c041f7ee129c3c2c72fb14df1f1e4069a
+# dropped copyright date change in test/5.5-lp.sh
+Patch1026: 0001-Fix-get_options-regression-Issue-1532.patch
+# https://github.com/OpenPrinting/cups/commit/3f2bdc293243bca938c6de23ba50e6d783189629
+Patch1027: 0001-Fix-filter-PPD-keyword-processing-Issue-1562.patch
 
 
 ##### Patches removed because IMHO they aren't no longer needed
@@ -405,6 +419,11 @@ to CUPS daemon. This solution will substitute printer drivers and raw queues in 
 %patch -P 1022 -p1 -b .osh-use-after-free
 # RHEL-154276 endless poll loop in http_write when POLLHUP is returned
 %patch -P 1023 -p1 -b .http-endless-poll-loop
+# RHEL-177945 CVE-2026-34980
+%patch -P 1024 -p1 -b .cve-2026-34980-control-chars
+%patch -P 1025 -p1 -b .cve-2026-34980-conf-escape
+%patch -P 1026 -p1 -b .cve-2026-34980-get-options
+%patch -P 1027 -p1 -b .cve-2026-34980-ppd-keyword
 
 
 # Log to the system journal by default (bug #1078781, bug #1519331).
@@ -876,6 +895,9 @@ rm -f %{cups_serverbin}/backend/smb
 %{_mandir}/man7/ippeveps.7.gz
 
 %changelog
+* Mon Jun 22 2026 RHEL Packaging Agent <redhat-ymir-agent@redhat.com> - 1:2.4.10-18
+- RHEL-177945 CVE-2026-34980 cups: control character injection in option values
+
 * Mon Mar 09 2026 Zdenek Dohnal <zdohnal@redhat.com> - 1:2.4.10-17
 - RHEL-154276 endless poll loop in http_write when POLLHUP is returned
 
